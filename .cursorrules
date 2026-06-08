@@ -1,0 +1,36 @@
+# Lagari — Project intelligence for Cursor
+
+## Session start
+
+1. Read ALL files under `memory-bank/` before substantive work.
+2. Read `docs/plan/PLATFORM-PLAN.md` and `docs/plan/ROADMAP.md` for current phase and decisions.
+3. For Next.js code in `lagari-fe/`, read and follow `lagari-fe/AGENTS.md`.
+4. Before using Next.js APIs, check `lagari-fe/node_modules/next/dist/docs/` for current behavior and deprecations.
+
+## Frontend package
+
+- Path: `lagari-fe/`
+- Stack: Next.js 16, React 19, Tailwind 4, TypeScript, App Router (`app/`)
+
+## Planning docs (source of truth for new sessions)
+
+| Path | Purpose |
+|------|---------|
+| `docs/plan/` | Platform plan, roadmap, session log |
+| `docs/adr/` | Architecture decision records |
+| `docs/architecture/` | ERD, OpenAPI MVP contract |
+| `docs/design/` | Luxury visual direction |
+| `docs/requirements/` | FR, NFR, gap matrix, glossary |
+
+## Memory Bank
+
+- Update `memory-bank/activeContext.md` and `memory-bank/progress.md` after significant planning or implementation; user may say **update memory bank**.
+
+## Skills
+
+- Use `@cursor-memory-bank` for memory bank workflow.
+- Storefront UX: `@frontend-design`; implementation: `@frontend-developer` (override Next version with `lagari-fe/AGENTS.md`).
+
+## Implementation gate
+
+- **No** `lagari-be` or commerce UI until user approves P1 plan and says **execute** for P2+.

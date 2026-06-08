@@ -1,0 +1,47 @@
+{
+  "name": "lagari-be",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lagari Express API — catalog, orders, sessions",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "prestart": "npm run build",
+    "start": "node dist/index.js",
+    "start:prod": "node dist/index.js",
+    "db:migrate": "sequelize-cli db:migrate",
+    "db:migrate:undo": "sequelize-cli db:migrate:undo",
+    "db:seed": "sequelize-cli db:seed:all",
+    "db:reset": "sequelize-cli db:migrate:undo:all && sequelize-cli db:migrate && sequelize-cli db:seed:all",
+    "db:create": "sequelize-cli db:create",
+    "setup:env": "powershell -ExecutionPolicy Bypass -File scripts/setup-local-env.ps1"
+  },
+  "keywords": [],
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cloudinary": "^2.10.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "helmet": "^8.2.0",
+    "ioredis": "^5.11.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "pg": "^8.21.0",
+    "sequelize": "^6.37.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.1",
+    "sequelize-cli": "^6.6.5",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

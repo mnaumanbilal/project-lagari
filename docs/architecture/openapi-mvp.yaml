@@ -1,0 +1,908 @@
+openapi: 3.0.3
+info:
+  title: Lagari API (MVP)
+  version: 0.1.0
+  description: REST contract for lagari-be — P3 implementation reference
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.lagari.pk
+    description: Production (TBD)
+
+tags:
+  - name: sessions
+  - name: catalog
+  - name: cart
+  - name: checkout
+  - name: analytics
+  - name: auth
+  - name: admin
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+
+  /sessions:
+    post:
+      tags: [sessions]
+      summary: Create analytics session
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}/touch:
+    post:
+      tags: [sessions]
+      summary: Refresh session activity (30m idle — FR-4)
+      parameters:
+        - $ref: "#/components/parameters/sessionId"
+      responses:
+        "204":
+          description: Updated
+
+  /catalog/categories:
+    get:
+      tags: [catalog]
+      summary: List categories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+
+  /catalog/products:
+    get:
+      tags: [catalog]
+      summary: List published products
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: note
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Search title or designer_inspiration
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 24
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductList"
+
+  /catalog/products/{slug}:
+    get:
+      tags: [catalog]
+      summary: Product detail by slug
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+        "404":
+          description: Not found
+
+  /cart:
+    get:
+      tags: [cart]
+      summary: Get cart for session
+      parameters:
+        - $ref: "#/components/parameters/sessionHeader"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+    post:
+      tags: [cart]
+      summary: Add or update line item
+      parameters:
+        - $ref: "#/components/parameters/sessionHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, quantity]
+              properties:
+                variantId:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+
+  /cart/items/{variantId}:
+    delete:
+      tags: [cart]
+      parameters:
+        - $ref: "#/components/parameters/sessionHeader"
+        - name: variantId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Cart"
+
+  /checkout/cod:
+    post:
+      tags: [checkout]
+      summary: Place COD order (FR-S4, FR-S7)
+      parameters:
+        - $ref: "#/components/parameters/sessionHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CodCheckoutRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderCreated"
+        "400":
+          description: Validation error
+        "409":
+          description: Empty cart
+
+  /analytics/events:
+    post:
+      tags: [analytics]
+      summary: Record single analytics event (alias of batch of 1)
+      parameters:
+        - $ref: "#/components/parameters/sessionHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyticsEvent"
+      responses:
+        "204":
+          description: Recorded
+        "401":
+          description: Session expired
+
+  /analytics/events/batch:
+    post:
+      tags: [analytics]
+      summary: Record batched analytics events (max 25)
+      parameters:
+        - $ref: "#/components/parameters/sessionHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                sessionId:
+                  type: string
+                  format: uuid
+                  description: Fallback when sendBeacon cannot set headers
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 25
+                  items:
+                    $ref: "#/components/schemas/AnalyticsEvent"
+      responses:
+        "204":
+          description: Recorded
+        "400":
+          description: Invalid batch
+        "401":
+          description: Session expired
+        "429":
+          description: Rate limited (12 batches/min per session)
+
+  /catalog/products/{slug}/reviews:
+    get:
+      tags: [catalog]
+      summary: Published product reviews
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductReview"
+    post:
+      tags: [catalog]
+      summary: Submit customer review (pending moderation)
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [authorName, rating, body]
+              properties:
+                authorName:
+                  type: string
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                body:
+                  type: string
+      responses:
+        "201":
+          description: Submitted
+
+  /admin/analytics/overview:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Analytics overview for date range
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            enum: [7, 30]
+            default: 7
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsOverview"
+
+  /admin/reviews:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, published]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminReview"
+
+  /admin/reviews/{id}:
+    patch:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [isPublished]
+              properties:
+                isPublished:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated
+    delete:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/reviews/import-shopify:
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Import Shopify review export (CSV/JSON)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                publishByDefault:
+                  type: boolean
+                reviews:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: integer
+                  skipped:
+                    type: integer
+
+  /auth/login:
+    post:
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+        "401":
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokens"
+
+  /admin/products:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: List all products including unpublished
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductDetail"
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Create product
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminProductInput"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+
+  /admin/products/{id}:
+    patch:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminProductInput"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductDetail"
+    delete:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Soft delete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/orders:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrderSummary"
+
+  /admin/orders/{id}:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
+  /admin/orders/{id}/status:
+    patch:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Transition order status (FR-2, FR-D6)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, confirmed, shipped, delivered, rto, cancelled]
+                note:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
+  /admin/metrics/summary:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: MVP dashboard tiles (simplified FR-D1)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ordersToday:
+                    type: integer
+                  revenueTodayPkr:
+                    type: integer
+                  pendingOrders:
+                    type: integer
+                  lowStockCount:
+                    type: integer
+                  activeSessions:
+                    type: integer
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    sessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    sessionHeader:
+      name: X-Session-Id
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+
+    ProductList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductCard"
+        page:
+          type: integer
+        total:
+          type: integer
+
+    ProductCard:
+      type: object
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        designerInspiration:
+          type: string
+        heroImageUrl:
+          type: string
+        fromPricePkr:
+          type: integer
+
+    ProductDetail:
+      allOf:
+        - $ref: "#/components/schemas/ProductCard"
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            description:
+              type: string
+            categories:
+              type: array
+              items:
+                type: string
+            noteTags:
+              type: array
+              items:
+                type: string
+            variants:
+              type: array
+              items:
+                $ref: "#/components/schemas/Variant"
+            images:
+              type: array
+              items:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  isHero:
+                    type: boolean
+
+    Variant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        pricePkr:
+          type: integer
+        stock:
+          type: integer
+        inStock:
+          type: boolean
+
+    Cart:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              variantId:
+                type: string
+              productTitle:
+                type: string
+              variantName:
+                type: string
+              quantity:
+                type: integer
+              lineTotalPkr:
+                type: integer
+        subtotalPkr:
+          type: integer
+
+    CodCheckoutRequest:
+      type: object
+      required: [fullName, phone, city, address]
+      properties:
+        fullName:
+          type: string
+        phone:
+          type: string
+        city:
+          type: string
+        address:
+          type: string
+        email:
+          type: string
+          format: email
+
+    OrderCreated:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        orderNumber:
+          type: integer
+        totalPkr:
+          type: integer
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresIn:
+          type: integer
+
+    AdminProductInput:
+      type: object
+      properties:
+        title:
+          type: string
+        slug:
+          type: string
+        description:
+          type: string
+        designerInspiration:
+          type: string
+        isPublished:
+          type: boolean
+        categorySlugs:
+          type: array
+          items:
+            type: string
+        noteTagSlugs:
+          type: array
+          items:
+            type: string
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderNumber:
+          type: integer
+        status:
+          type: string
+        totalPkr:
+          type: integer
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    OrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/OrderSummary"
+        - type: object
+          properties:
+            shippingCity:
+              type: string
+            shippingAddress:
+              type: string
+            items:
+              type: array
+              items:
+                type: object
+            timeline:
+              type: array
+              items:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+
+    AnalyticsEvent:
+      type: object
+      required: [eventName]
+      properties:
+        eventName:
+          type: string
+        payload:
+          type: object
+        clientTs:
+          type: string
+          format: date-time
+
+    AnalyticsOverview:
+      type: object
+      properties:
+        rangeDays:
+          type: integer
+        newVisitors:
+          type: integer
+        activeSessions:
+          type: integer
+        cancelledOrders:
+          type: integer
+        cartDropOffRate:
+          type: number
+        checkoutStarts:
+          type: integer
+        checkoutConversions:
+          type: integer
+        topProductsByViews:
+          type: array
+          items:
+            type: object
+            properties:
+              productSlug:
+                type: string
+              views:
+                type: integer
+
+    ProductReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorName:
+          type: string
+        rating:
+          type: integer
+        body:
+          type: string
+        source:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminReview:
+      allOf:
+        - $ref: "#/components/schemas/ProductReview"
+        - type: object
+          properties:
+            productSlug:
+              type: string
+            productTitle:
+              type: string
+            isPublished:
+              type: boolean
