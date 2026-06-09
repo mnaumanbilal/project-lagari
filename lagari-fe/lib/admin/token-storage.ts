@@ -8,19 +8,23 @@ export type AdminTokens = {
   refreshToken: string;
 };
 
-export function getAdminTokens(): AdminTokens | null {
+/** Read tokens without clearing storage (access may be expired). */
+export function readAdminTokens(): AdminTokens | null {
   if (typeof window === "undefined") return null;
   const accessToken = localStorage.getItem(ACCESS_KEY);
   const refreshToken = localStorage.getItem(REFRESH_KEY);
   if (!accessToken || !refreshToken) return null;
-  if (isAccessTokenExpired(accessToken)) {
-    clearAdminTokens();
-    return null;
-  }
   return { accessToken, refreshToken };
 }
 
-/** Valid access token from storage, or null if missing/expired. */
+export function getAdminTokens(): AdminTokens | null {
+  const tokens = readAdminTokens();
+  if (!tokens) return null;
+  if (isAccessTokenExpired(tokens.accessToken)) return null;
+  return tokens;
+}
+
+/** Sync read — valid non-expired access token only (does not refresh). */
 export function getValidAccessToken(): string | null {
   return getAdminTokens()?.accessToken ?? null;
 }

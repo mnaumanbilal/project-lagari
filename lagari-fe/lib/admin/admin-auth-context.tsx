@@ -10,11 +10,13 @@ import {
   type ReactNode,
 } from "react";
 import { adminLogin } from "@/lib/api/auth";
+import { ADMIN_LOGIN_PATH } from "@/lib/admin/constants";
+import { ensureAccessToken } from "@/lib/admin/refresh-access-token";
 import {
   clearAdminTokens,
-  getValidAccessToken,
   setAdminTokens,
 } from "@/lib/admin/token-storage";
+import { registerAuthHandlers } from "@/lib/admin/unauthorized-handler";
 
 type AdminAuthContextValue = {
   ready: boolean;
@@ -31,8 +33,21 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
   useEffect(() => {
-    setAccessToken(getValidAccessToken());
-    setReady(true);
+    registerAuthHandlers({
+      onUnauthorized: () => {
+        clearAdminTokens();
+        setAccessToken(null);
+        window.location.assign(ADMIN_LOGIN_PATH);
+      },
+      onTokenRefreshed: (token) => setAccessToken(token),
+    });
+
+    void ensureAccessToken().then((token) => {
+      setAccessToken(token);
+      setReady(true);
+    });
+
+    return () => registerAuthHandlers(null);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {

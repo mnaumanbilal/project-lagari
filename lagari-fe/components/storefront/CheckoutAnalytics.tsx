@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   trackCheckoutAbandon,
   trackCheckoutStart,
@@ -10,10 +10,16 @@ import { useCart } from "@/lib/cart/cart-context";
 
 export function CheckoutAnalytics() {
   const { itemCount, ready } = useCart();
+  const started = useRef(false);
 
   useEffect(() => {
     if (!ready || itemCount < 1) return;
-    trackCheckoutStart(itemCount);
+
+    if (!started.current) {
+      trackCheckoutStart(itemCount);
+      started.current = true;
+    }
+
     return () => {
       if (!wasCheckoutPlaced() && itemCount > 0) {
         trackCheckoutAbandon(itemCount);

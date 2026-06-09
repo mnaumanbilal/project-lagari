@@ -1,5 +1,5 @@
-import { API_BASE_URL } from "./config";
 import { ApiError } from "./client";
+import { adminApiFetch, adminAuthorizedFetch } from "./admin-client";
 
 export type MediaCapabilities = {
   cloudinaryUpload: boolean;
@@ -8,11 +8,10 @@ export type MediaCapabilities = {
 export async function fetchMediaCapabilities(
   accessToken: string,
 ): Promise<MediaCapabilities> {
-  const res = await fetch(`${API_BASE_URL}/admin/media/capabilities`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
-  return res.json() as Promise<MediaCapabilities>;
+  return adminApiFetch<MediaCapabilities>(
+    "/admin/media/capabilities",
+    { accessToken },
+  );
 }
 
 export async function uploadProductImage(
@@ -22,11 +21,11 @@ export async function uploadProductImage(
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${API_BASE_URL}/admin/media/upload`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: form,
-  });
+  const res = await adminAuthorizedFetch(
+    "/admin/media/upload",
+    { method: "POST", body: form },
+    accessToken,
+  );
 
   if (!res.ok) {
     let message = res.statusText;

@@ -1,7 +1,8 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { trackCategoryView, trackSearch } from "@/lib/analytics/event-buffer";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { ProductSearchInput } from "@/components/storefront/ProductSearchInput";
 import { ShopFilters } from "@/components/storefront/ShopFilters";
@@ -58,6 +59,18 @@ export function ShopCatalog({
     : "No impressions match your filters.";
 
   const showSearching = isSearching || isDebouncing;
+
+  useEffect(() => {
+    if (debouncedQ.trim()) {
+      trackSearch(debouncedQ);
+    }
+  }, [debouncedQ]);
+
+  useEffect(() => {
+    if (activeCategory && activeCategory !== "all") {
+      trackCategoryView(activeCategory);
+    }
+  }, [activeCategory]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-14">

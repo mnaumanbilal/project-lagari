@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
 import { Op } from "sequelize";
 import { z } from "zod";
-import { Order, OrderTimelineEvent, Product } from "../db/models";
-import { AppError } from "../middleware/errorHandler";
+import { Order, Product } from "../db/models";
 import * as adminProducts from "../services/admin.product.service";
 import * as analytics from "../services/analytics.service";
+import * as orderService from "../services/order.service";
 import * as reviewService from "../services/review.service";
 
 export async function getMetricsSummary(_req: Request, res: Response) {
@@ -115,64 +115,23 @@ export async function deleteAdminProduct(req: Request, res: Response) {
   res.status(204).send();
 }
 
+const ordersListQuery = z.object({
+  status: z
+    .enum(["pending", "confirmed", "shipped", "delivered", "rto", "cancelled"])
+    .optional(),
+  search: z.string().optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export async function listAdminOrders(req: Request, res: Response) {
-  const status = req.query.status as string | undefined;
-  const where = status ? { status } : {};
-  const orders = await Order.findAll({
-    where,
-    include: [{ association: "customer" }],
-    order: [["createdAt", "DESC"]],
-    limit: 100,
-  });
-  res.json(
-    orders.map((o) => {
-      const customer = (o as Order & { customer?: { fullName: string | null; phone: string } }).customer;
-      return {
-        id: o.id,
-        orderNumber: o.orderNumber,
-        status: o.status,
-        totalPkr: o.totalPkr,
-        customerName: customer?.fullName ?? "—",
-        customerPhone: customer?.phone ?? "—",
-        createdAt: o.createdAt,
-      };
-    }),
-  );
+  const query = ordersListQuery.parse(req.query);
+  const result = await orderService.listAdminOrders(query);
+  res.json(result);
 }
 
 export async function getAdminOrder(req: Request, res: Response) {
-  const orderId = String(req.params.id);
-  const order = await Order.findByPk(orderId, {
-    include: [
-      { association: "customer" },
-      { association: "items" },
-      { association: "timeline" },
-    ],
-  });
-  if (!order) throw new AppError(404, "Order not found");
-
-  const customer = (order as Order & { customer?: { fullName: string | null; phone: string } }).customer;
-  const items = (order as Order & { items?: Array<Record<string, unknown>> }).items ?? [];
-  const timeline = (order as Order & { timeline?: OrderTimelineEvent[] }).timeline ?? [];
-
-  res.json({
-    id: order.id,
-    orderNumber: order.orderNumber,
-    status: order.status,
-    totalPkr: order.totalPkr,
-    subtotalPkr: order.subtotalPkr,
-    discountPkr: order.discountPkr,
-    customerName: customer?.fullName,
-    customerPhone: customer?.phone,
-    shippingCity: order.shippingCity,
-    shippingAddress: order.shippingAddress,
-    items,
-    timeline: timeline.map((t) => ({
-      message: t.message,
-      createdAt: t.createdAt,
-    })),
-    createdAt: order.createdAt,
-  });
+  res.json(await orderService.getAdminOrderById(String(req.params.id)));
 }
 
 const statusSchema = z.object({
@@ -185,43 +144,33 @@ const statusSchema = z.object({
     "cancelled",
   ]),
   note: z.string().optional(),
+  courierName: z.string().optional(),
+  trackingNumber: z.string().optional(),
 });
-
-const allowedTransitions: Record<string, string[]> = {
-  pending: ["confirmed", "rto", "cancelled"],
-  confirmed: ["shipped", "rto", "cancelled"],
-  shipped: ["delivered", "rto"],
-  delivered: [],
-  rto: [],
-  cancelled: [],
-};
 
 export async function patchOrderStatus(req: Request, res: Response) {
   const body = statusSchema.parse(req.body);
-  const orderId = String(req.params.id);
-  const order = await Order.findByPk(orderId);
-  if (!order) throw new AppError(404, "Order not found");
-
-  const allowed = allowedTransitions[order.status] ?? [];
-  if (!allowed.includes(body.status)) {
-    throw new AppError(400, `Cannot transition from ${order.status} to ${body.status}`);
-  }
-
-  const from = order.status;
-  await order.update({ status: body.status });
-
-  await OrderTimelineEvent.create({
-    orderId: order.id,
-    actorAdminId: req.adminId ?? null,
-    eventType: "status_changed",
-    fromStatus: from,
+  const detail = await orderService.updateOrderStatus({
+    orderId: String(req.params.id),
     toStatus: body.status,
-    message: body.note ?? `Status changed to ${body.status}`,
+    actorAdminId: req.adminId ?? null,
+    note: body.note,
+    courierName: body.courierName,
+    trackingNumber: body.trackingNumber,
   });
+  res.json(detail);
+}
 
-  const detail = await Order.findByPk(order.id, {
-    include: [{ association: "customer" }, { association: "items" }, { association: "timeline" }],
-  });
+const orderNotesSchema = z.object({
+  adminNotes: z.string().nullable(),
+});
+
+export async function patchAdminOrder(req: Request, res: Response) {
+  const body = orderNotesSchema.parse(req.body);
+  const detail = await orderService.updateAdminOrderNotes(
+    String(req.params.id),
+    body.adminNotes,
+  );
   res.json(detail);
 }
 

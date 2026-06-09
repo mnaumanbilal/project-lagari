@@ -6,13 +6,13 @@ import { bindAnalyticsSession, trackPageView } from "./event-buffer";
 import { useSession } from "@/lib/session/session-context";
 
 export function AnalyticsProvider({ children }: { children: ReactNode }) {
-  const { sessionId, ready } = useSession();
+  const { sessionId, visitorId, ready } = useSession();
   const pathname = usePathname();
 
   useEffect(() => {
     if (!ready) return;
-    bindAnalyticsSession(sessionId);
-  }, [sessionId, ready]);
+    bindAnalyticsSession(sessionId, visitorId);
+  }, [sessionId, visitorId, ready]);
 
   useEffect(() => {
     if (!ready || !sessionId || !pathname) return;

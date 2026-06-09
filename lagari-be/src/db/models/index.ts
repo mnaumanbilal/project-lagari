@@ -188,19 +188,49 @@ Customer.init(
   { sequelize, tableName: "customers", underscored: true },
 );
 
+// --- AnalyticsVisitor ---
+export interface AnalyticsVisitorAttributes {
+  id: string;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+}
+type VisitorCreation = Optional<AnalyticsVisitorAttributes, "id">;
+
+export class AnalyticsVisitor
+  extends Model<AnalyticsVisitorAttributes, VisitorCreation>
+  implements AnalyticsVisitorAttributes
+{
+  declare id: string;
+  declare firstSeenAt: Date;
+  declare lastSeenAt: Date;
+}
+AnalyticsVisitor.init(
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    firstSeenAt: { type: DataTypes.DATE, allowNull: false, field: "first_seen_at" },
+    lastSeenAt: { type: DataTypes.DATE, allowNull: false, field: "last_seen_at" },
+  },
+  { sequelize, tableName: "analytics_visitors", underscored: true },
+);
+
 // --- AnalyticsSession ---
 export interface AnalyticsSessionAttributes {
   id: string;
+  visitorId: string | null;
   startedAt: Date;
   lastActivityAt: Date;
   endedAt: Date | null;
   userAgent: string | null;
   referrer: string | null;
 }
-type SessionCreation = Optional<AnalyticsSessionAttributes, "id" | "endedAt" | "userAgent" | "referrer">;
+type SessionCreation = Optional<
+  AnalyticsSessionAttributes,
+  "id" | "visitorId" | "endedAt" | "userAgent" | "referrer"
+>;
 
 export class AnalyticsSession extends Model<AnalyticsSessionAttributes, SessionCreation> implements AnalyticsSessionAttributes {
   declare id: string;
+  declare visitorId: string | null;
   declare startedAt: Date;
   declare lastActivityAt: Date;
   declare endedAt: Date | null;
@@ -210,6 +240,7 @@ export class AnalyticsSession extends Model<AnalyticsSessionAttributes, SessionC
 AnalyticsSession.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    visitorId: { type: DataTypes.UUID, allowNull: true, field: "visitor_id" },
     startedAt: { type: DataTypes.DATE, allowNull: false, field: "started_at" },
     lastActivityAt: { type: DataTypes.DATE, allowNull: false, field: "last_activity_at" },
     endedAt: { type: DataTypes.DATE, allowNull: true, field: "ended_at" },
@@ -217,6 +248,43 @@ AnalyticsSession.init(
     referrer: { type: DataTypes.TEXT, allowNull: true },
   },
   { sequelize, tableName: "analytics_sessions", underscored: true },
+);
+
+// --- AnalyticsEventFingerprint ---
+export interface AnalyticsEventFingerprintAttributes {
+  id: string;
+  sessionId: string;
+  visitorId: string | null;
+  eventName: string;
+  dedupKey: string;
+  bucketDate: string;
+}
+type FingerprintCreation = Optional<
+  AnalyticsEventFingerprintAttributes,
+  "id" | "visitorId"
+>;
+
+export class AnalyticsEventFingerprint
+  extends Model<AnalyticsEventFingerprintAttributes, FingerprintCreation>
+  implements AnalyticsEventFingerprintAttributes
+{
+  declare id: string;
+  declare sessionId: string;
+  declare visitorId: string | null;
+  declare eventName: string;
+  declare dedupKey: string;
+  declare bucketDate: string;
+}
+AnalyticsEventFingerprint.init(
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    sessionId: { type: DataTypes.UUID, allowNull: false, field: "session_id" },
+    visitorId: { type: DataTypes.UUID, allowNull: true, field: "visitor_id" },
+    eventName: { type: DataTypes.STRING(64), allowNull: false, field: "event_name" },
+    dedupKey: { type: DataTypes.STRING(255), allowNull: false, field: "dedup_key" },
+    bucketDate: { type: DataTypes.DATEONLY, allowNull: false, field: "bucket_date" },
+  },
+  { sequelize, tableName: "analytics_event_fingerprints", underscored: true, updatedAt: false },
 );
 
 export type OrderStatus =
@@ -240,10 +308,16 @@ export interface OrderAttributes {
   shippingCity: string;
   shippingAddress: string;
   notes: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
+  adminNotes: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
-type OrderCreation = Optional<OrderAttributes, "id" | "orderNumber" | "sessionId" | "discountPkr" | "notes">;
+type OrderCreation = Optional<
+  OrderAttributes,
+  "id" | "orderNumber" | "sessionId" | "discountPkr" | "notes" | "courierName" | "trackingNumber" | "adminNotes"
+>;
 
 export class Order extends Model<OrderAttributes, OrderCreation> implements OrderAttributes {
   declare id: string;
@@ -259,6 +333,9 @@ export class Order extends Model<OrderAttributes, OrderCreation> implements Orde
   declare shippingCity: string;
   declare shippingAddress: string;
   declare notes: string | null;
+  declare courierName: string | null;
+  declare trackingNumber: string | null;
+  declare adminNotes: string | null;
 }
 Order.init(
   {
@@ -284,6 +361,9 @@ Order.init(
     shippingCity: { type: DataTypes.STRING, allowNull: false, field: "shipping_city" },
     shippingAddress: { type: DataTypes.TEXT, allowNull: false, field: "shipping_address" },
     notes: { type: DataTypes.TEXT, allowNull: true },
+    courierName: { type: DataTypes.STRING, allowNull: true, field: "courier_name" },
+    trackingNumber: { type: DataTypes.STRING, allowNull: true, field: "tracking_number" },
+    adminNotes: { type: DataTypes.TEXT, allowNull: true, field: "admin_notes" },
   },
   { sequelize, tableName: "orders", underscored: true },
 );
@@ -547,8 +627,20 @@ OrderItem.belongsTo(Order, { foreignKey: "order_id", as: "order" });
 Order.hasMany(OrderTimelineEvent, { foreignKey: "order_id", as: "timeline" });
 OrderTimelineEvent.belongsTo(Order, { foreignKey: "order_id", as: "order" });
 
+AnalyticsVisitor.hasMany(AnalyticsSession, { foreignKey: "visitor_id", as: "sessions" });
+AnalyticsSession.belongsTo(AnalyticsVisitor, { foreignKey: "visitor_id", as: "visitor" });
+
 AnalyticsSession.hasMany(AnalyticsEvent, { foreignKey: "session_id", as: "events" });
 AnalyticsEvent.belongsTo(AnalyticsSession, { foreignKey: "session_id", as: "session" });
+
+AnalyticsSession.hasMany(AnalyticsEventFingerprint, {
+  foreignKey: "session_id",
+  as: "fingerprints",
+});
+AnalyticsEventFingerprint.belongsTo(AnalyticsSession, {
+  foreignKey: "session_id",
+  as: "session",
+});
 
 Order.belongsTo(AnalyticsSession, { foreignKey: "session_id", as: "analyticsSession" });
 
@@ -565,6 +657,8 @@ export const db = {
   ProductImage,
   Customer,
   AnalyticsSession,
+  AnalyticsVisitor,
+  AnalyticsEventFingerprint,
   Order,
   OrderItem,
   AdminUser,

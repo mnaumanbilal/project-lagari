@@ -3,9 +3,10 @@ import { z } from "zod";
 import { AppError } from "../middleware/errorHandler";
 import * as analytics from "../services/analytics.service";
 import { touchSession } from "../services/session.service";
+import { ANALYTICS_EVENT_NAMES } from "../utils/analytics-dedup";
 
 const eventSchema = z.object({
-  eventName: z.string().min(1).max(64),
+  eventName: z.enum(ANALYTICS_EVENT_NAMES),
   payload: z.record(z.string(), z.unknown()).optional().nullable(),
   clientTs: z.string().optional(),
 });
@@ -13,6 +14,7 @@ const eventSchema = z.object({
 const batchSchema = z.object({
   events: z.array(eventSchema).min(1).max(25),
   sessionId: z.string().uuid().optional(),
+  visitorId: z.string().uuid().optional(),
 });
 
 export async function postAnalyticsBatch(req: Request, res: Response) {
@@ -20,11 +22,10 @@ export async function postAnalyticsBatch(req: Request, res: Response) {
   const sessionId = req.header("X-Session-Id") ?? parsed.sessionId;
   if (!sessionId) throw new AppError(400, "X-Session-Id required");
 
-  const body = parsed;
   const alive = await touchSession(sessionId);
   if (!alive) throw new AppError(401, "Session expired");
 
-  await analytics.ingestEventBatch(sessionId, body.events);
+  await analytics.ingestEventBatch(sessionId, parsed.events);
   res.status(204).send();
 }
 

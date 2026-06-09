@@ -15,3 +15,12 @@ export async function adminLogin(
     body: JSON.stringify({ email, password }),
   });
 }
+
+export async function adminRefreshToken(
+  refreshToken: string,
+): Promise<LoginResponse> {
+  return apiFetch<LoginResponse>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
+}
