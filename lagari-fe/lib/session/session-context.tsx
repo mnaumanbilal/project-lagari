@@ -11,14 +11,22 @@ import {
 import { USE_API } from "@/lib/api/config";
 import { createSession, touchSession } from "@/lib/api/session";
 
-const STORAGE_KEY = "lagari_session_id";
+const SESSION_STORAGE_KEY = "lagari_session_id";
+const VISITOR_STORAGE_KEY = "lagari_visitor_id";
+
+function getOrCreateVisitorId(): string {
+  const existing = localStorage.getItem(VISITOR_STORAGE_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  localStorage.setItem(VISITOR_STORAGE_KEY, id);
+  return id;
+}
 
 type SessionContextValue = {
   sessionId: string | null;
+  visitorId: string | null;
   ready: boolean;
-  /** Validate stored session or create a new one; returns active session id. */
   ensureSession: () => Promise<string>;
-  /** Discard current session and create a fresh one. */
   refreshSession: () => Promise<string>;
 };
 
@@ -26,11 +34,18 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [visitorId, setVisitorId] = useState<string | null>(null);
   const [ready, setReady] = useState(!USE_API);
 
   const createAndStoreSession = useCallback(async (): Promise<string> => {
-    const session = await createSession();
-    sessionStorage.setItem(STORAGE_KEY, session.id);
+    const vid = getOrCreateVisitorId();
+    setVisitorId(vid);
+    const session = await createSession(vid);
+    if (session.visitorId) {
+      localStorage.setItem(VISITOR_STORAGE_KEY, session.visitorId);
+      setVisitorId(session.visitorId);
+    }
+    sessionStorage.setItem(SESSION_STORAGE_KEY, session.id);
     setSessionId(session.id);
     setReady(true);
     return session.id;
@@ -42,7 +57,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return "";
     }
 
-    const stored = sessionStorage.getItem(STORAGE_KEY);
+    const vid = getOrCreateVisitorId();
+    setVisitorId(vid);
+
+    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (stored) {
       try {
         await touchSession(stored);
@@ -50,7 +68,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setReady(true);
         return stored;
       } catch {
-        sessionStorage.removeItem(STORAGE_KEY);
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
       }
     }
 
@@ -59,14 +77,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async (): Promise<string> => {
     if (!USE_API) return "";
-    sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
     setSessionId(null);
     return createAndStoreSession();
   }, [createAndStoreSession]);
 
   useEffect(() => {
     ensureSession().catch(() => {
-      sessionStorage.removeItem(STORAGE_KEY);
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
       setSessionId(null);
       setReady(true);
     });
@@ -74,7 +92,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext.Provider
-      value={{ sessionId, ready, ensureSession, refreshSession }}
+      value={{ sessionId, visitorId, ready, ensureSession, refreshSession }}
     >
       {children}
     </SessionContext.Provider>

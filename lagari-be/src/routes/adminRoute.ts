@@ -9,6 +9,7 @@ import {
   deleteAdminProduct,
   deleteAdminReview,
   getAdminOrder,
+  patchAdminOrder,
   getAdminProduct,
   getAnalyticsOverview,
   getMetricsSummary,
@@ -41,6 +42,7 @@ router.patch("/admin/products/:id", catchAsync(patchAdminProduct));
 router.delete("/admin/products/:id", catchAsync(deleteAdminProduct));
 router.get("/admin/orders", catchAsync(listAdminOrders));
 router.get("/admin/orders/:id", catchAsync(getAdminOrder));
+router.patch("/admin/orders/:id", catchAsync(patchAdminOrder));
 router.patch("/admin/orders/:id/status", catchAsync(patchOrderStatus));
 router.get("/admin/reviews", catchAsync(listAdminReviews));
 router.patch("/admin/reviews/:id", catchAsync(patchAdminReview));

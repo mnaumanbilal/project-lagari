@@ -2,12 +2,14 @@ import { apiFetch } from "./client";
 
 export type SessionResponse = {
   id: string;
+  visitorId: string | null;
   expiresAt: string;
 };
 
-export async function createSession(): Promise<SessionResponse> {
+export async function createSession(visitorId?: string): Promise<SessionResponse> {
   return apiFetch<SessionResponse>("/sessions", {
     method: "POST",
+    body: JSON.stringify(visitorId ? { visitorId } : {}),
     cache: "no-store",
   });
 }

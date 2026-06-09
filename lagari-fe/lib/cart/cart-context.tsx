@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { trackAddToCart } from "@/lib/analytics/event-buffer";
+import { trackAddToCart, trackRemoveFromCart } from "@/lib/analytics/event-buffer";
 import { USE_API } from "@/lib/api/config";
 import * as cartApi from "@/lib/api/cart";
 import { withSessionRetry } from "@/lib/api/with-session-retry";
@@ -186,12 +186,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const setQuantity = useCallback(
     async (variantId: string, quantity: number) => {
       if (USE_API) {
-        const cart =
-          quantity < 1
-            ? await runCartOp((id) => cartApi.removeFromCart(id, variantId))
-            : await runCartOp((id) =>
-                cartApi.addToCart(id, variantId, quantity),
-              );
+        if (quantity < 1) {
+          const cart = await runCartOp((id) =>
+            cartApi.removeFromCart(id, variantId),
+          );
+          applyCart(cart);
+          trackRemoveFromCart({
+            variantId,
+            productSlug: slugByVariant[variantId],
+          });
+          return;
+        }
+        const cart = await runCartOp((id) =>
+          cartApi.addToCart(id, variantId, quantity),
+        );
         applyCart(cart);
         return;
       }
@@ -216,7 +224,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [runCartOp, applyCart],
+    [runCartOp, applyCart, slugByVariant],
   );
 
   const removeItem = useCallback(
@@ -226,6 +234,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
           cartApi.removeFromCart(id, variantId),
         );
         applyCart(cart);
+        trackRemoveFromCart({
+          variantId,
+          productSlug: slugByVariant[variantId],
+        });
         return;
       }
       setLines((prev) => {
@@ -236,7 +248,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [runCartOp, applyCart],
+    [runCartOp, applyCart, slugByVariant],
   );
 
   const clearCart = useCallback(() => {

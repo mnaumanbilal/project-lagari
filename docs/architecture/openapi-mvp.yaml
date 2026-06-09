@@ -30,6 +30,16 @@ paths:
     post:
       tags: [sessions]
       summary: Create analytics session
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visitorId:
+                  type: string
+                  format: uuid
       responses:
         "201":
           description: Session created
@@ -512,14 +522,40 @@ paths:
           in: query
           schema:
             type: string
+            enum: [pending, confirmed, shipped, delivered, rto, cancelled]
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Order number, customer phone, or name
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
       responses:
         "200":
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/OrderSummary"
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OrderSummary"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
 
   /admin/orders/{id}:
     get:
@@ -533,6 +569,35 @@ paths:
           schema:
             type: string
             format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
+    patch:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Update internal admin notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                adminNotes:
+                  type: string
+                  nullable: true
       responses:
         "200":
           content:
@@ -566,6 +631,12 @@ paths:
                   enum: [pending, confirmed, shipped, delivered, rto, cancelled]
                 note:
                   type: string
+                courierName:
+                  type: string
+                  description: Required when status is shipped
+                trackingNumber:
+                  type: string
+                  description: Required when status is shipped
       responses:
         "200":
           content:
@@ -627,6 +698,10 @@ components:
         id:
           type: string
           format: uuid
+        visitorId:
+          type: string
+          format: uuid
+          nullable: true
         expiresAt:
           type: string
           format: date-time
@@ -810,6 +885,15 @@ components:
           type: string
         customerPhone:
           type: string
+        customerEmail:
+          type: string
+          nullable: true
+        shippingCity:
+          type: string
+        itemCount:
+          type: integer
+        itemPreview:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -819,19 +903,59 @@ components:
         - $ref: "#/components/schemas/OrderSummary"
         - type: object
           properties:
-            shippingCity:
-              type: string
+            subtotalPkr:
+              type: integer
+            discountPkr:
+              type: integer
             shippingAddress:
               type: string
+            courierName:
+              type: string
+              nullable: true
+            trackingNumber:
+              type: string
+              nullable: true
+            adminNotes:
+              type: string
+              nullable: true
+            allowedNextStatuses:
+              type: array
+              items:
+                type: string
             items:
               type: array
               items:
                 type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  variantId:
+                    type: string
+                    format: uuid
+                  productTitleSnapshot:
+                    type: string
+                  variantNameSnapshot:
+                    type: string
+                  unitPricePkr:
+                    type: integer
+                  quantity:
+                    type: integer
+                  lineTotalPkr:
+                    type: integer
             timeline:
               type: array
               items:
                 type: object
                 properties:
+                  eventType:
+                    type: string
+                  fromStatus:
+                    type: string
+                    nullable: true
+                  toStatus:
+                    type: string
+                    nullable: true
                   message:
                     type: string
                   createdAt:
@@ -855,18 +979,62 @@ components:
       properties:
         rangeDays:
           type: integer
+        uniqueVisitors:
+          type: integer
         newVisitors:
+          type: integer
+        returningVisitors:
           type: integer
         activeSessions:
           type: integer
         cancelledOrders:
           type: integer
-        cartDropOffRate:
-          type: number
+        ordersPlacedInRange:
+          type: integer
+        productViewSessions:
+          type: integer
+        addToCartSessions:
+          type: integer
         checkoutStarts:
           type: integer
         checkoutConversions:
           type: integer
+        orderPlacedSessions:
+          type: integer
+        cartDropOffRate:
+          type: number
+        checkoutConversionRate:
+          type: number
+        viewToCartRate:
+          type: number
+        cartToCheckoutRate:
+          type: number
+        cartAbandonmentRate:
+          type: number
+        overallConversionRate:
+          type: number
+        topProducts:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnalyticsTopProduct"
+        topSearches:
+          type: array
+          items:
+            type: object
+            properties:
+              query:
+                type: string
+              uniqueSessions:
+                type: integer
+        categoryInterest:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              uniqueSessions:
+                type: integer
         topProductsByViews:
           type: array
           items:
@@ -876,6 +1044,24 @@ components:
                 type: string
               views:
                 type: integer
+
+    AnalyticsTopProduct:
+      type: object
+      properties:
+        productSlug:
+          type: string
+        productId:
+          type: string
+          format: uuid
+          nullable: true
+        productTitle:
+          type: string
+        uniqueViewers:
+          type: integer
+        totalViews:
+          type: integer
+        addToCartSessions:
+          type: integer
 
     ProductReview:
       type: object

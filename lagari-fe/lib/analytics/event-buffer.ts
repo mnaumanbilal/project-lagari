@@ -1,6 +1,15 @@
 "use client";
 
 import { API_BASE_URL, USE_API } from "@/lib/api/config";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/event-names";
+import {
+  markOrderPlaced,
+  shouldTrackCategoryView,
+  shouldTrackCheckoutAbandon,
+  shouldTrackCheckoutStart,
+  shouldTrackProductView,
+  shouldTrackSearch,
+} from "@/lib/analytics/dedupe";
 
 export type AnalyticsEventInput = {
   eventName: string;
@@ -14,6 +23,7 @@ const PAGE_VIEW_DEBOUNCE_MS = 2000;
 
 let queue: AnalyticsEventInput[] = [];
 let sessionId: string | null = null;
+let visitorId: string | null = null;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 let lastPageView: { path: string; at: number } | null = null;
 
@@ -23,7 +33,7 @@ function canSend() {
 
 async function postBatch(events: AnalyticsEventInput[], keepalive = false) {
   if (!sessionId || !USE_API) return;
-  const body = JSON.stringify({ events, sessionId });
+  const body = JSON.stringify({ events, sessionId, visitorId: visitorId ?? undefined });
   const url = `${API_BASE_URL}/analytics/events/batch`;
 
   if (keepalive && typeof navigator !== "undefined" && navigator.sendBeacon) {
@@ -54,7 +64,7 @@ export function flushAnalytics(keepalive = false) {
 export function trackEvent(event: AnalyticsEventInput) {
   if (!USE_API || !sessionId) return;
 
-  if (event.eventName === "page_view") {
+  if (event.eventName === ANALYTICS_EVENTS.PAGE_VIEW) {
     const path = String(event.payload?.path ?? "");
     const now = Date.now();
     if (
@@ -75,8 +85,9 @@ export function trackEvent(event: AnalyticsEventInput) {
   if (queue.length >= MAX_BATCH) flushAnalytics();
 }
 
-export function bindAnalyticsSession(id: string | null) {
+export function bindAnalyticsSession(id: string | null, visitor: string | null = null) {
   sessionId = id;
+  visitorId = visitor;
   if (!id) {
     if (flushTimer) clearInterval(flushTimer);
     flushTimer = null;
@@ -93,11 +104,15 @@ export function bindAnalyticsSession(id: string | null) {
 }
 
 export function trackPageView(path: string) {
-  trackEvent({ eventName: "page_view", payload: { path } });
+  trackEvent({ eventName: ANALYTICS_EVENTS.PAGE_VIEW, payload: { path } });
 }
 
 export function trackProductView(productSlug: string) {
-  trackEvent({ eventName: "product_view", payload: { productSlug } });
+  if (!shouldTrackProductView(productSlug)) return;
+  trackEvent({
+    eventName: ANALYTICS_EVENTS.PRODUCT_VIEW,
+    payload: { productSlug },
+  });
 }
 
 export function trackAddToCart(payload: {
@@ -105,17 +120,43 @@ export function trackAddToCart(payload: {
   variantId: string;
   qty: number;
 }) {
-  trackEvent({ eventName: "add_to_cart", payload });
+  trackEvent({ eventName: ANALYTICS_EVENTS.ADD_TO_CART, payload });
+}
+
+export function trackRemoveFromCart(payload: {
+  variantId: string;
+  productSlug?: string;
+}) {
+  trackEvent({ eventName: ANALYTICS_EVENTS.REMOVE_FROM_CART, payload });
 }
 
 export function trackCheckoutStart(itemCount: number) {
-  trackEvent({ eventName: "checkout_start", payload: { itemCount } });
+  if (!shouldTrackCheckoutStart()) return;
+  trackEvent({
+    eventName: ANALYTICS_EVENTS.CHECKOUT_START,
+    payload: { itemCount },
+  });
 }
 
 export function trackCheckoutAbandon(itemCount: number) {
-  trackEvent({ eventName: "checkout_abandon", payload: { itemCount } });
+  if (!shouldTrackCheckoutAbandon()) return;
+  trackEvent({
+    eventName: ANALYTICS_EVENTS.CHECKOUT_ABANDON,
+    payload: { itemCount },
+  });
 }
 
 export function trackOrderPlaced(orderId: string) {
-  trackEvent({ eventName: "order_placed", payload: { orderId } });
+  markOrderPlaced();
+  trackEvent({ eventName: ANALYTICS_EVENTS.ORDER_PLACED, payload: { orderId } });
+}
+
+export function trackSearch(query: string) {
+  if (!shouldTrackSearch(query)) return;
+  trackEvent({ eventName: ANALYTICS_EVENTS.SEARCH, payload: { query: query.trim() } });
+}
+
+export function trackCategoryView(category: string) {
+  if (!shouldTrackCategoryView(category)) return;
+  trackEvent({ eventName: ANALYTICS_EVENTS.CATEGORY_VIEW, payload: { category } });
 }

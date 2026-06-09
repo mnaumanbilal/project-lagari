@@ -1,12 +1,31 @@
 import { env } from "../config/env";
-import { AnalyticsSession } from "../db/models";
+import { AnalyticsSession, AnalyticsVisitor } from "../db/models";
+
+export async function resolveVisitor(visitorId?: string | null): Promise<AnalyticsVisitor> {
+  const now = new Date();
+  if (visitorId) {
+    const existing = await AnalyticsVisitor.findByPk(visitorId);
+    if (existing) {
+      await existing.update({ lastSeenAt: now });
+      return existing;
+    }
+  }
+  return AnalyticsVisitor.create({
+    firstSeenAt: now,
+    lastSeenAt: now,
+  });
+}
 
 export async function createSession(input: {
   userAgent?: string;
   referrer?: string;
+  visitorId?: string | null;
 }): Promise<AnalyticsSession> {
   const now = new Date();
+  const visitor = await resolveVisitor(input.visitorId);
+
   return AnalyticsSession.create({
+    visitorId: visitor.id,
     startedAt: now,
     lastActivityAt: now,
     endedAt: null,
@@ -27,5 +46,11 @@ export async function touchSession(sessionId: string): Promise<boolean> {
   }
 
   await session.update({ lastActivityAt: now });
+  if (session.visitorId) {
+    await AnalyticsVisitor.update(
+      { lastSeenAt: now },
+      { where: { id: session.visitorId } },
+    );
+  }
   return true;
 }

@@ -93,11 +93,13 @@ export function CheckoutForm() {
           setSubmitting(true);
 
           const form = new FormData(e.currentTarget);
+          const emailRaw = String(form.get("email") ?? "").trim();
           const body = {
             fullName: String(form.get("fullName")),
             phone: String(form.get("phone")),
             city: String(form.get("city")),
             address: String(form.get("address")),
+            ...(emailRaw ? { email: emailRaw } : {}),
           };
 
           try {
@@ -155,6 +157,16 @@ export function CheckoutForm() {
               type="tel"
               className="mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
               placeholder="03XX XXXXXXX"
+            />
+          </label>
+          <label className="block">
+            <span className="font-label text-lagari-brass-dim">Email (optional)</span>
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              className="mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              placeholder="you@example.com"
             />
           </label>
           <label className="block">
