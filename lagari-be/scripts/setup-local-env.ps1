@@ -79,6 +79,12 @@ JWT_REFRESH_EXPIRES=7d
 
 SEED_ADMIN_EMAIL=admin@lagari.pk
 SEED_ADMIN_PASSWORD=changeme123
+
+# Cloudinary (optional — get keys from console.cloudinary.com)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+CLOUDINARY_FOLDER=lagari/products
 "@
 
 $beEnvPath = Join-Path $beRoot ".env"
