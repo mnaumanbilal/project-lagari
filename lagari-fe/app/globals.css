@@ -1,0 +1,347 @@
+@import "tailwindcss";
+
+:root {
+  --lagari-bg-deep: #0a0908;
+  --lagari-bg-elevated: #141210;
+  --lagari-surface: #1c1916;
+  --lagari-text-primary: #f5f0e8;
+  --lagari-text-muted: #a39e94;
+  --lagari-accent-brass: #c9a962;
+  --lagari-accent-brass-dim: #8a7340;
+  --lagari-border: rgba(201, 169, 98, 0.15);
+  --lagari-danger: #c45c4a;
+  --lagari-success: #6b8f71;
+  --lagari-profile-light: #2a2838;
+  --lagari-profile-dark: #0a0908;
+
+  --lagari-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --lagari-duration-slow: 700ms;
+  --lagari-duration-medium: 500ms;
+  --lagari-duration-fast: 300ms;
+
+  --font-display: var(--font-cormorant);
+  --font-body: var(--font-dm-sans);
+}
+
+@theme inline {
+  --color-lagari-deep: var(--lagari-bg-deep);
+  --color-lagari-elevated: var(--lagari-bg-elevated);
+  --color-lagari-surface: var(--lagari-surface);
+  --color-lagari-primary: var(--lagari-text-primary);
+  --color-lagari-muted: var(--lagari-text-muted);
+  --color-lagari-brass: var(--lagari-accent-brass);
+  --color-lagari-brass-dim: var(--lagari-accent-brass-dim);
+  --color-lagari-border: var(--lagari-border);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  /* Safety net: static fallbacks stay fully visible when OS motion is off */
+  .motion-static,
+  .motion-static * {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+body {
+  background: var(--lagari-bg-deep);
+  color: var(--lagari-text-primary);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.font-label {
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+@keyframes lagari-ken-burns {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes lagari-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lagari-ken-burns {
+  animation: lagari-ken-burns 14s var(--lagari-ease-out) infinite alternate;
+}
+
+.lagari-fade-up {
+  animation: lagari-fade-up 0.9s var(--lagari-ease-out) forwards;
+  opacity: 0;
+}
+
+.lagari-fade-up-delay-1 {
+  animation-delay: 0.15s;
+}
+
+.lagari-fade-up-delay-2 {
+  animation-delay: 0.35s;
+}
+
+.lagari-fade-up-delay-3 {
+  animation-delay: 0.55s;
+}
+
+/* —— Home hero: text-only brush panel + minimal edge scrim —— */
+.lagari-hero-scrim {
+  background: linear-gradient(
+    to top,
+    rgba(10, 9, 8, 0.28) 0%,
+    transparent 22%
+  );
+}
+
+.lagari-hero-headline {
+  color: var(--lagari-accent-brass);
+  text-shadow:
+    0 1px 2px rgba(10, 9, 8, 0.75),
+    0 4px 20px rgba(10, 9, 8, 0.4);
+}
+
+.lagari-hero-tagline {
+  text-shadow: 0 2px 14px rgba(10, 9, 8, 0.55);
+}
+
+.product-card-media-zoom {
+  transition: transform var(--lagari-duration-slow) var(--lagari-ease-out);
+}
+
+.group:hover .product-card-media-zoom {
+  transform: scale(1.03);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-card-media-zoom {
+    transition: none;
+  }
+  .group:hover .product-card-media-zoom {
+    transform: none;
+  }
+}
+
+.product-card-img-hover {
+  transition: opacity var(--lagari-duration-slow) var(--lagari-ease-out);
+}
+
+/* Admin control room — dark surfaces, warm type, brass accent */
+.admin-theme {
+  --lagari-bg-deep: #0c0b0a;
+  --lagari-bg-elevated: #141210;
+  --lagari-surface: #1a1815;
+  --lagari-input-bg: #232018;
+  --lagari-text-primary: #f5f0e8;
+  --lagari-text-muted: #a39e94;
+  --lagari-accent-brass: #c9a962;
+  --lagari-accent-brass-dim: #8a7340;
+  --lagari-border: rgba(201, 169, 98, 0.18);
+  --lagari-danger: #e07a6a;
+  --lagari-success: #7fa886;
+
+  background: var(--lagari-bg-deep);
+  color: var(--lagari-text-primary);
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  min-height: 100%;
+}
+
+.admin-theme .font-display {
+  color: var(--lagari-text-primary);
+}
+
+/* Admin UI copy — DM Sans; avoid storefront mono labels */
+.admin-theme .font-label {
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.admin-theme thead .font-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.admin-theme .admin-btn {
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.admin-theme .admin-card {
+  border: 1px solid var(--lagari-border);
+  background: var(--lagari-surface);
+  border-radius: 0.125rem;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+}
+
+.admin-theme .admin-input {
+  border: 1px solid var(--lagari-border);
+  background: var(--lagari-input-bg);
+  color: var(--lagari-text-primary);
+  border-radius: 0.125rem;
+}
+
+.admin-theme .admin-input::placeholder {
+  color: var(--lagari-text-muted);
+  opacity: 0.7;
+}
+
+.admin-theme .admin-input:focus {
+  border-color: var(--lagari-accent-brass);
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(201, 169, 98, 0.25);
+}
+
+.admin-theme .admin-input[aria-invalid="true"] {
+  border-color: var(--lagari-danger);
+  box-shadow: 0 0 0 1px rgba(224, 122, 106, 0.35);
+}
+
+.admin-theme .admin-field-error {
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--lagari-danger);
+}
+
+.admin-theme [data-admin-field].admin-field-invalid > .admin-card,
+.admin-theme [data-admin-field].admin-field-invalid.admin-card,
+.admin-theme [data-admin-field].admin-field-invalid > .admin-tiptap {
+  border-color: var(--lagari-danger);
+  box-shadow: 0 0 0 1px rgba(224, 122, 106, 0.35);
+}
+
+.admin-theme [data-admin-field="variants"].admin-field-invalid {
+  border: 1px solid var(--lagari-danger);
+  border-radius: 0.125rem;
+  padding: 0.75rem;
+  box-shadow: 0 0 0 1px rgba(224, 122, 106, 0.25);
+}
+
+/* Primary CTAs */
+.admin-theme .admin-btn-primary {
+  border: 1px solid var(--lagari-accent-brass);
+  background: var(--lagari-accent-brass);
+  color: #0a0908;
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 0.125rem;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.admin-theme .admin-btn-primary:hover {
+  background: transparent;
+  color: var(--lagari-accent-brass);
+}
+
+/* TipTap rich text (admin product description) */
+.admin-theme .admin-tiptap .admin-tiptap-editor {
+  background: var(--lagari-input-bg);
+  color: var(--lagari-text-primary);
+  font-family: var(--font-body), "DM Sans", system-ui, sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor p {
+  margin: 0.5em 0;
+  color: var(--lagari-text-muted);
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor h2 {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--lagari-text-primary);
+  margin: 0.75em 0 0.35em;
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor h3 {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--lagari-text-primary);
+  margin: 0.65em 0 0.3em;
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor ul,
+.admin-theme .admin-tiptap .admin-tiptap-editor ol {
+  margin: 0.5em 0;
+  padding-left: 1.35em;
+  color: var(--lagari-text-muted);
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor a {
+  color: var(--lagari-accent-brass);
+  text-decoration: underline;
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor img {
+  max-width: 100%;
+  height: auto;
+  margin: 0.75em 0;
+  border-radius: 0.125rem;
+}
+
+.admin-theme .admin-tiptap .admin-tiptap-editor hr {
+  border: none;
+  border-top: 1px solid var(--lagari-border);
+  margin: 1em 0;
+}
+
+.admin-theme .admin-tiptap .ProseMirror-focused {
+  outline: none;
+}
+
+.grain-overlay::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 50;
+}
