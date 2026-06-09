@@ -10,6 +10,7 @@ import { withSessionRetry } from "@/lib/api/with-session-retry";
 import { markCheckoutPlaced } from "@/lib/analytics/checkout-placed";
 import { trackOrderPlaced } from "@/lib/analytics/event-buffer";
 import { CheckoutAnalytics } from "@/components/storefront/CheckoutAnalytics";
+import { CheckoutSuggestions } from "@/components/storefront/CheckoutSuggestions";
 import { CartPanel } from "@/components/storefront/CartPanel";
 import { useCart } from "@/lib/cart/cart-context";
 import { useSession } from "@/lib/session/session-context";
@@ -145,8 +146,9 @@ export function CheckoutForm() {
             <input
               required
               name="fullName"
-              className="mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              className="lagari-field mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
               placeholder="Your name"
+              autoComplete="name"
             />
           </label>
           <label className="block">
@@ -155,8 +157,9 @@ export function CheckoutForm() {
               required
               name="phone"
               type="tel"
-              className="mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              className="lagari-field mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
               placeholder="03XX XXXXXXX"
+              autoComplete="tel"
             />
           </label>
           <label className="block">
@@ -165,7 +168,7 @@ export function CheckoutForm() {
               name="email"
               type="email"
               autoComplete="email"
-              className="mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              className="lagari-field mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
               placeholder="you@example.com"
             />
           </label>
@@ -174,7 +177,8 @@ export function CheckoutForm() {
             <select
               required
               name="city"
-              className="mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              className="lagari-field mt-2 w-full rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              autoComplete="address-level2"
               defaultValue=""
             >
               <option value="" disabled>
@@ -193,8 +197,9 @@ export function CheckoutForm() {
               required
               name="address"
               rows={3}
-              className="mt-2 w-full resize-y rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
+              className="lagari-field mt-2 w-full resize-y rounded-sm border border-lagari-border bg-lagari-surface px-4 py-3.5 text-lagari-primary outline-none transition-colors focus:border-lagari-brass"
               placeholder="House, street, area"
+              autoComplete="street-address"
             />
           </label>
         </div>
@@ -208,10 +213,11 @@ export function CheckoutForm() {
         </button>
       </form>
 
-      <aside className="lg:col-span-2">
+      <aside className="space-y-6 lg:col-span-2">
         <div className="rounded-sm border border-lagari-border bg-lagari-surface p-6">
           <CartPanel variant="checkout" />
         </div>
+        <CheckoutSuggestions />
       </aside>
     </div>
   );

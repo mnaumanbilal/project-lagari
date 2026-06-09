@@ -66,6 +66,18 @@ body {
   font-family: var(--font-body), system-ui, sans-serif;
 }
 
+/* Storefront fields — keep dark surfaces when browser autofill kicks in */
+.lagari-field:-webkit-autofill,
+.lagari-field:-webkit-autofill:hover,
+.lagari-field:-webkit-autofill:focus,
+.lagari-field:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--lagari-surface) inset !important;
+  box-shadow: 0 0 0 1000px var(--lagari-surface) inset !important;
+  -webkit-text-fill-color: var(--lagari-text-primary) !important;
+  caret-color: var(--lagari-text-primary);
+  transition: background-color 99999s ease-out 0s;
+}
+
 .font-display {
   font-family: var(--font-display), Georgia, serif;
 }
@@ -212,6 +224,18 @@ body {
   border-color: var(--lagari-accent-brass);
   outline: none;
   box-shadow: 0 0 0 1px rgba(201, 169, 98, 0.25);
+}
+
+.admin-theme .admin-input:-webkit-autofill,
+.admin-theme .admin-input:-webkit-autofill:hover,
+.admin-theme .admin-input:-webkit-autofill:focus,
+.admin-theme .admin-input:-webkit-autofill:active,
+.admin-theme select.admin-input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--lagari-input-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--lagari-input-bg) inset !important;
+  -webkit-text-fill-color: var(--lagari-text-primary) !important;
+  caret-color: var(--lagari-text-primary);
+  transition: background-color 99999s ease-out 0s;
 }
 
 .admin-theme .admin-input[aria-invalid="true"] {
