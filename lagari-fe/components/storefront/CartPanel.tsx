@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CartLineItem } from "@/components/storefront/CartLineItem";
 import { formatPkr } from "@/lib/format";
 import { useCart } from "@/lib/cart/cart-context";
 
 type Props = {
   onCheckout?: () => void;
+  /** Close drawer / panel when continuing to shop (e.g. already on /shop). */
+  onContinueShopping?: () => void;
   showHeading?: boolean;
   /** On checkout page — hide redundant checkout CTA */
   variant?: "default" | "checkout";
@@ -14,10 +17,19 @@ type Props = {
 
 export function CartPanel({
   onCheckout,
+  onContinueShopping,
   showHeading = true,
   variant = "default",
 }: Props) {
+  const pathname = usePathname();
   const { lines, subtotalPkr, ready } = useCart();
+
+  function handleContinueShopping(e: React.MouseEvent<HTMLAnchorElement>) {
+    onContinueShopping?.();
+    if (pathname === "/shop") {
+      e.preventDefault();
+    }
+  }
 
   if (!ready) {
     return (
@@ -31,6 +43,7 @@ export function CartPanel({
         <p className="font-display text-lg text-lagari-primary">Your bag is empty</p>
         <Link
           href="/shop"
+          onClick={handleContinueShopping}
           className="mt-4 inline-block font-label text-sm text-lagari-brass hover:underline"
         >
           Continue shopping
@@ -65,7 +78,7 @@ export function CartPanel({
         )}
         <Link
           href="/shop"
-          onClick={onCheckout}
+          onClick={handleContinueShopping}
           className={`block text-center text-sm text-lagari-muted transition-colors hover:text-lagari-brass ${
             variant === "default" ? "mt-2" : "mt-4"
           }`}

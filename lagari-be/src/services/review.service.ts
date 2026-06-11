@@ -7,6 +7,7 @@ import {
   ProductVariant,
 } from "../db/models";
 import { AppError } from "../middleware/errorHandler";
+import { notifyReviewSubmitted } from "./notification.service";
 
 const VERIFIED_ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered"];
 
@@ -129,6 +130,14 @@ export async function submitCustomerReview(
     sessionId: sessionId ?? null,
   });
 
+  void notifyReviewSubmitted({
+    reviewId: review.id,
+    productTitle: product.title,
+    authorName: review.authorName,
+    rating: review.rating,
+    isPublished: verified,
+  }).catch((err) => console.error("review notification failed:", err));
+
   if (verified) {
     return {
       id: review.id,
@@ -188,6 +197,44 @@ export async function deleteReview(id: string) {
   const review = await ProductReview.findByPk(id);
   if (!review) throw new AppError(404, "Review not found");
   await review.destroy();
+}
+
+export type BulkActionResult = {
+  succeeded: number;
+  failed: Array<{ id: string; error: string }>;
+};
+
+export async function bulkDeleteReviews(ids: string[]): Promise<BulkActionResult> {
+  const result: BulkActionResult = { succeeded: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      await deleteReview(id);
+      result.succeeded += 1;
+    } catch (err) {
+      const message =
+        err instanceof AppError ? err.message : "Could not delete review";
+      result.failed.push({ id, error: message });
+    }
+  }
+  return result;
+}
+
+export async function bulkPatchReviews(
+  ids: string[],
+  isPublished: boolean,
+): Promise<BulkActionResult> {
+  const result: BulkActionResult = { succeeded: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      await patchReview(id, isPublished);
+      result.succeeded += 1;
+    } catch (err) {
+      const message =
+        err instanceof AppError ? err.message : "Could not update review";
+      result.failed.push({ id, error: message });
+    }
+  }
+  return result;
 }
 
 export type ShopifyReviewRow = {

@@ -6,21 +6,26 @@ import * as adminProducts from "../services/admin.product.service";
 import * as analytics from "../services/analytics.service";
 import * as orderService from "../services/order.service";
 import * as reviewService from "../services/review.service";
+import { resolveAnalyticsRange } from "../utils/analytics-range";
 
 export async function getMetricsSummary(_req: Request, res: Response) {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
+  const activeOrderWhere = { archivedAt: null };
+
   const ordersToday = await Order.count({
-    where: { createdAt: { [Op.gte]: startOfDay } },
+    where: { createdAt: { [Op.gte]: startOfDay }, ...activeOrderWhere },
   });
 
   const todayOrders = await Order.findAll({
-    where: { createdAt: { [Op.gte]: startOfDay } },
+    where: { createdAt: { [Op.gte]: startOfDay }, ...activeOrderWhere },
     attributes: ["totalPkr"],
   });
   const revenueTodayPkr = todayOrders.reduce((s, o) => s + o.totalPkr, 0);
-  const pendingOrders = await Order.count({ where: { status: "pending" } });
+  const pendingOrders = await Order.count({
+    where: { status: "pending", ...activeOrderWhere },
+  });
 
   const [lowStockRows] = await Product.sequelize!.query(
     `SELECT COUNT(*)::int AS count FROM product_variants WHERE is_active = true AND stock <= low_stock_threshold;`,
@@ -38,9 +43,18 @@ export async function getMetricsSummary(_req: Request, res: Response) {
 }
 
 export async function getAnalyticsOverview(req: Request, res: Response) {
-  const days = Number(req.query.days ?? 7);
-  const safeDays = [7, 30].includes(days) ? days : 7;
-  res.json(await analytics.getAnalyticsOverview(safeDays));
+  try {
+    const range = resolveAnalyticsRange({
+      preset: req.query.preset as string | undefined,
+      from: req.query.from as string | undefined,
+      to: req.query.to as string | undefined,
+      days: req.query.days as string | undefined,
+    });
+    res.json(await analytics.getAnalyticsOverview(range));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid date range";
+    res.status(400).json({ error: message });
+  }
 }
 
 export async function listAdminProducts(_req: Request, res: Response) {
@@ -115,6 +129,15 @@ export async function deleteAdminProduct(req: Request, res: Response) {
   res.status(204).send();
 }
 
+const bulkIdsSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+});
+
+export async function bulkDeleteAdminProducts(req: Request, res: Response) {
+  const { ids } = bulkIdsSchema.parse(req.body);
+  res.json(await adminProducts.bulkSoftDeleteProducts(ids));
+}
+
 const ordersListQuery = z.object({
   status: z
     .enum(["pending", "confirmed", "shipped", "delivered", "rto", "cancelled"])
@@ -122,6 +145,7 @@ const ordersListQuery = z.object({
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
+  archived: z.enum(["true", "false", "all"]).optional(),
 });
 
 export async function listAdminOrders(req: Request, res: Response) {
@@ -144,6 +168,7 @@ const statusSchema = z.object({
     "cancelled",
   ]),
   note: z.string().optional(),
+  cancelReason: z.string().optional(),
   courierName: z.string().optional(),
   trackingNumber: z.string().optional(),
 });
@@ -155,6 +180,7 @@ export async function patchOrderStatus(req: Request, res: Response) {
     toStatus: body.status,
     actorAdminId: req.adminId ?? null,
     note: body.note,
+    cancelReason: body.cancelReason,
     courierName: body.courierName,
     trackingNumber: body.trackingNumber,
   });
@@ -172,6 +198,20 @@ export async function patchAdminOrder(req: Request, res: Response) {
     body.adminNotes,
   );
   res.json(detail);
+}
+
+const archiveSchema = z.object({
+  archived: z.boolean(),
+});
+
+export async function patchAdminOrderArchive(req: Request, res: Response) {
+  const body = archiveSchema.parse(req.body);
+  res.json(await orderService.archiveOrder(String(req.params.id), body.archived));
+}
+
+export async function bulkArchiveAdminOrders(req: Request, res: Response) {
+  const body = bulkIdsSchema.extend({ archived: z.boolean() }).parse(req.body);
+  res.json(await orderService.bulkArchiveOrders(body.ids, body.archived));
 }
 
 const reviewStatusQuery = z.object({
@@ -196,6 +236,18 @@ export async function patchAdminReview(req: Request, res: Response) {
 export async function deleteAdminReview(req: Request, res: Response) {
   await reviewService.deleteReview(String(req.params.id));
   res.status(204).send();
+}
+
+export async function bulkDeleteAdminReviews(req: Request, res: Response) {
+  const { ids } = bulkIdsSchema.parse(req.body);
+  res.json(await reviewService.bulkDeleteReviews(ids));
+}
+
+export async function bulkPatchAdminReviews(req: Request, res: Response) {
+  const body = bulkIdsSchema
+    .extend({ isPublished: z.boolean() })
+    .parse(req.body);
+  res.json(await reviewService.bulkPatchReviews(body.ids, body.isPublished));
 }
 
 const importSchema = z.object({

@@ -1,0 +1,5 @@
+﻿# Next.js build output — exclude from Cursor search & indexing
+**/.next/
+
+# Dependencies
+**/node_modules/

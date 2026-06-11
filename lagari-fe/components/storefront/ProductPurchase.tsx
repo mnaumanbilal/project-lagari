@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ProductCartActions } from "@/components/storefront/ProductCartActions";
 import { QuantityStepper } from "@/components/storefront/QuantityStepper";
+import { trackVariantSelect } from "@/lib/analytics/event-buffer";
 import { getMaxStock, isVariantPurchasable } from "@/lib/cart/helpers";
 import { formatPkr } from "@/lib/format";
 import type { CatalogProduct } from "@/lib/types/catalog";
@@ -33,6 +34,7 @@ export function ProductPurchase({ product }: ProductPurchaseProps) {
                 onClick={() => {
                   setVariantId(v.id);
                   setQuantity(1);
+                  trackVariantSelect(product.slug, v.id);
                 }}
                 className={`rounded-sm border px-4 py-2.5 text-sm transition-colors ${
                   variantId === v.id

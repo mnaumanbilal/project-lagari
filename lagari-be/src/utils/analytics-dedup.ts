@@ -8,16 +8,23 @@ export const ANALYTICS_EVENT_NAMES = [
   "order_placed",
   "search",
   "category_view",
+  "cart_drawer_open",
+  "variant_select",
+  "note_filter_apply",
 ] as const;
 
 export type AnalyticsEventName = (typeof ANALYTICS_EVENT_NAMES)[number];
 
 const COUNTABLE_EVENTS = new Set<AnalyticsEventName>([
   "product_view",
+  "add_to_cart",
   "checkout_start",
   "checkout_abandon",
   "search",
   "category_view",
+  "cart_drawer_open",
+  "variant_select",
+  "note_filter_apply",
 ]);
 
 export function isCountableEvent(eventName: string): eventName is AnalyticsEventName {
@@ -57,6 +64,21 @@ export function computeDedupKey(
     case "category_view": {
       const cat = String(payload?.category ?? "").trim();
       return cat ? `category:${cat}` : null;
+    }
+    case "add_to_cart": {
+      const variantId = String(payload?.variantId ?? "").trim();
+      return variantId ? `cart:${variantId}` : null;
+    }
+    case "cart_drawer_open":
+      return "cart_drawer_open";
+    case "variant_select": {
+      const variantId = String(payload?.variantId ?? "").trim();
+      const slug = String(payload?.productSlug ?? "").trim();
+      return variantId && slug ? `variant:${slug}:${variantId}` : null;
+    }
+    case "note_filter_apply": {
+      const note = String(payload?.note ?? "").trim();
+      return note ? `note:${note}` : null;
     }
     default:
       return null;

@@ -21,6 +21,12 @@ export type AdminOrderRow = {
   itemCount: number;
   itemPreview: string;
   createdAt: string;
+  archivedAt: string | null;
+};
+
+export type AdminBulkActionResult = {
+  succeeded: number;
+  failed: Array<{ id: string; error: string }>;
 };
 
 export type AdminOrderItem = {
@@ -48,6 +54,7 @@ export type AdminOrderDetail = AdminOrderRow & {
   courierName: string | null;
   trackingNumber: string | null;
   adminNotes: string | null;
+  cancelReason: string | null;
   items: AdminOrderItem[];
   timeline: AdminOrderTimelineEvent[];
   allowedNextStatuses: string[];
@@ -63,6 +70,7 @@ export type AdminOrdersListResponse = {
 export type AdminOrderStatusPatch = {
   status: string;
   note?: string;
+  cancelReason?: string;
   courierName?: string;
   trackingNumber?: string;
 };
@@ -86,8 +94,20 @@ export type AnalyticsTopProduct = {
   addToCartSessions: number;
 };
 
+export type AnalyticsPreset =
+  | "this_week"
+  | "last_7_days"
+  | "this_month"
+  | "this_year"
+  | "last_30_days";
+
+export type AnalyticsRangeParams =
+  | { preset: AnalyticsPreset }
+  | { from: string; to: string };
+
 export type AnalyticsOverview = {
-  rangeDays: number;
+  preset: AnalyticsPreset | null;
+  label: string;
   from: string;
   to: string;
   uniqueVisitors: number;
@@ -98,7 +118,9 @@ export type AnalyticsOverview = {
   ordersPlacedInRange: number;
   productViewSessions: number;
   addToCartSessions: number;
+  viewThenCartSessions: number;
   checkoutStarts: number;
+  cartThenCheckoutSessions: number;
   checkoutConversions: number;
   orderPlacedSessions: number;
   cartDropOffRate: number;
@@ -107,6 +129,7 @@ export type AnalyticsOverview = {
   cartToCheckoutRate: number;
   cartAbandonmentRate: number;
   overallConversionRate: number;
+  dataQualityWarnings: string[];
   topProducts: AnalyticsTopProduct[];
   topSearches: Array<{ query: string; uniqueSessions: number }>;
   categoryInterest: Array<{ category: string; uniqueSessions: number }>;
@@ -161,7 +184,8 @@ export function normalizeAnalyticsOverview(
   const uniqueVisitors = num(raw.uniqueVisitors, num(raw.newVisitors));
 
   return {
-    rangeDays: num(raw.rangeDays, 7),
+    preset: (raw.preset as AnalyticsPreset | null | undefined) ?? null,
+    label: raw.label ?? "",
     from: raw.from ?? "",
     to: raw.to ?? "",
     uniqueVisitors,
@@ -175,7 +199,15 @@ export function normalizeAnalyticsOverview(
     ordersPlacedInRange: num(raw.ordersPlacedInRange),
     productViewSessions: num(raw.productViewSessions),
     addToCartSessions: num(raw.addToCartSessions),
+    viewThenCartSessions: num(
+      raw.viewThenCartSessions,
+      num(raw.addToCartSessions),
+    ),
     checkoutStarts: num(raw.checkoutStarts),
+    cartThenCheckoutSessions: num(
+      raw.cartThenCheckoutSessions,
+      num(raw.checkoutStarts),
+    ),
     checkoutConversions: num(raw.checkoutConversions),
     orderPlacedSessions: num(raw.orderPlacedSessions),
     cartDropOffRate: num(raw.cartDropOffRate),
@@ -191,6 +223,7 @@ export function normalizeAnalyticsOverview(
     cartToCheckoutRate: num(raw.cartToCheckoutRate),
     cartAbandonmentRate: num(raw.cartAbandonmentRate),
     overallConversionRate: num(raw.overallConversionRate),
+    dataQualityWarnings: raw.dataQualityWarnings ?? [],
     topProducts,
     topSearches: raw.topSearches ?? [],
     categoryInterest: raw.categoryInterest ?? [],
@@ -198,12 +231,22 @@ export function normalizeAnalyticsOverview(
   };
 }
 
+function buildAnalyticsQuery(range: AnalyticsRangeParams): string {
+  if ("preset" in range) {
+    return `preset=${range.preset}`;
+  }
+  const params = new URLSearchParams();
+  params.set("from", range.from);
+  params.set("to", range.to);
+  return params.toString();
+}
+
 export async function fetchAdminAnalytics(
   accessToken: string,
-  days: 7 | 30 = 7,
+  range: AnalyticsRangeParams = { preset: "last_7_days" },
 ): Promise<AnalyticsOverview> {
   const raw = await adminApiFetch<Partial<AnalyticsOverview>>(
-    `/admin/analytics/overview?days=${days}`,
+    `/admin/analytics/overview?${buildAnalyticsQuery(range)}`,
     authHeaders(accessToken),
   );
   return normalizeAnalyticsOverview(raw);
@@ -214,6 +257,7 @@ export type FetchAdminOrdersParams = {
   search?: string;
   page?: number;
   limit?: number;
+  archived?: "true" | "false" | "all";
 };
 
 export async function fetchAdminOrders(
@@ -225,6 +269,7 @@ export async function fetchAdminOrders(
   if (params.search?.trim()) searchParams.set("search", params.search.trim());
   if (params.page) searchParams.set("page", String(params.page));
   if (params.limit) searchParams.set("limit", String(params.limit));
+  if (params.archived) searchParams.set("archived", params.archived);
   const q = searchParams.toString();
   const raw = await adminApiFetch<AdminOrdersListResponse | AdminOrderRow[]>(
     `/admin/orders${q ? `?${q}` : ""}`,
@@ -313,6 +358,41 @@ export async function deleteAdminProduct(
   });
 }
 
+export async function bulkDeleteAdminProducts(
+  accessToken: string,
+  ids: string[],
+): Promise<AdminBulkActionResult> {
+  return adminApiFetch<AdminBulkActionResult>("/admin/products/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+    ...authHeaders(accessToken),
+  });
+}
+
+export async function archiveAdminOrder(
+  accessToken: string,
+  id: string,
+  archived: boolean,
+): Promise<AdminOrderDetail> {
+  return adminApiFetch<AdminOrderDetail>(`/admin/orders/${id}/archive`, {
+    method: "PATCH",
+    body: JSON.stringify({ archived }),
+    ...authHeaders(accessToken),
+  });
+}
+
+export async function bulkArchiveAdminOrders(
+  accessToken: string,
+  ids: string[],
+  archived: boolean,
+): Promise<AdminBulkActionResult> {
+  return adminApiFetch<AdminBulkActionResult>("/admin/orders/bulk-archive", {
+    method: "POST",
+    body: JSON.stringify({ ids, archived }),
+    ...authHeaders(accessToken),
+  });
+}
+
 export async function fetchAdminReviews(
   accessToken: string,
   status: "pending" | "published",
@@ -341,6 +421,29 @@ export async function deleteAdminReview(
 ): Promise<void> {
   return adminApiFetch(`/admin/reviews/${id}`, {
     method: "DELETE",
+    ...authHeaders(accessToken),
+  });
+}
+
+export async function bulkDeleteAdminReviews(
+  accessToken: string,
+  ids: string[],
+): Promise<AdminBulkActionResult> {
+  return adminApiFetch<AdminBulkActionResult>("/admin/reviews/bulk-delete", {
+    method: "POST",
+    body: JSON.stringify({ ids }),
+    ...authHeaders(accessToken),
+  });
+}
+
+export async function bulkPatchAdminReviews(
+  accessToken: string,
+  ids: string[],
+  isPublished: boolean,
+): Promise<AdminBulkActionResult> {
+  return adminApiFetch<AdminBulkActionResult>("/admin/reviews/bulk-patch", {
+    method: "POST",
+    body: JSON.stringify({ ids, isPublished }),
     ...authHeaders(accessToken),
   });
 }

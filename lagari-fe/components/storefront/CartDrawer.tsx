@@ -51,7 +51,11 @@ export function CartDrawer({ open, onClose }: Props) {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <CartPanel showHeading={false} onCheckout={onClose} />
+          <CartPanel
+            showHeading={false}
+            onCheckout={onClose}
+            onContinueShopping={onClose}
+          />
         </div>
       </aside>
     </div>

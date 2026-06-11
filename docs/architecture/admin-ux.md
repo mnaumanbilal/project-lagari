@@ -71,3 +71,37 @@ See [ADR-004](../adr/004-media-cloudinary.md).
 2. Run client validation before `apiFetch`
 3. `catch (ApiError)` → `parseApiError` → `applyFieldErrors` + appropriate toast
 4. Use `admin-input` / `AdminTextField` for consistent styling
+
+## Confirm dialogs and bulk actions
+
+Destructive or irreversible admin actions use shared components:
+
+| Component | Path | Use |
+|-----------|------|-----|
+| `AdminConfirmDialog` | `components/admin/AdminConfirmDialog.tsx` | Modal before delete, archive, bulk ops |
+| `useAdminRowSelection` | `lib/admin/hooks/use-admin-row-selection.ts` | Checkbox selection state |
+| `AdminBulkActionBar` | `components/admin/AdminBulkActionBar.tsx` | Sticky bar when rows selected |
+
+**Products:** soft-delete (hidden from shop; order snapshots kept). Confirm before single or bulk delete.
+
+**Orders:** soft-archive via `archived_at` (admin list housekeeping only; status workflow unchanged). Default list shows active orders only.
+
+**Reviews:** hard-delete requires confirm; bulk publish/unpublish/delete via bulk API.
+
+Bulk API responses: `{ succeeded, failed: [{ id, error }] }` — toast partial success when needed.
+
+## Mobile responsiveness
+
+Breakpoint **`lg` (1024px)** — tables at `lg+`, card lists below.
+
+| Component | Path | Use |
+|-----------|------|-----|
+| `AdminUserMenu` | `components/admin/AdminUserMenu.tsx` | Header profile circle → Storefront, Sign out |
+| `AdminRowActionsMenu` | `components/admin/AdminRowActionsMenu.tsx` | Row actions: inline on desktop; on mobile, kebab when 2+ actions |
+| `AdminListCard` | `components/admin/AdminListCard.tsx` | Mobile list row shell + labeled field grid |
+
+**Nav:** desktop sidebar (`md+`); mobile horizontal scroll tabs below header.
+
+**Lists:** Orders, Products, Dashboard recent orders, Analytics top products use dual layout (`hidden lg:block` table + `lg:hidden` cards).
+
+**Notifications:** fixed panel under header on small screens with backdrop tap-to-close.

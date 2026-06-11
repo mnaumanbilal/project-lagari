@@ -8,6 +8,7 @@ import { useAdminAuth } from "@/lib/admin/admin-auth-context";
 import { getValidAccessToken } from "@/lib/admin/token-storage";
 import { ApiError } from "@/lib/api/client";
 import { useAdminToast } from "@/lib/admin/admin-toast-context";
+import { unlockNotificationSound } from "@/lib/admin/notification-sound";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export function AdminLoginForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    unlockNotificationSound();
     setError(null);
     setLoading(true);
     try {

@@ -14,6 +14,11 @@
   --lagari-profile-light: #2a2838;
   --lagari-profile-dark: #0a0908;
 
+  --lagari-scrollbar-track: var(--lagari-bg-elevated);
+  --lagari-scrollbar-thumb: rgba(138, 115, 64, 0.55);
+  --lagari-scrollbar-thumb-hover: rgba(201, 169, 98, 0.78);
+  --lagari-scrollbar-thumb-active: rgba(201, 169, 98, 0.92);
+
   --lagari-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --lagari-duration-slow: 700ms;
   --lagari-duration-medium: 500ms;
@@ -38,6 +43,7 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -131,20 +137,21 @@ body {
   animation-delay: 0.55s;
 }
 
-/* —— Home hero —— */
-.product-card-media-zoom {
+/* —— Product card hover —— */
+.product-card-img-zoom {
   transition: transform var(--lagari-duration-slow) var(--lagari-ease-out);
 }
 
-.group:hover .product-card-media-zoom {
+.group:hover .product-card-img-zoom {
   transform: scale(1.03);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .product-card-media-zoom {
+  .product-card-img-zoom {
     transition: none;
   }
-  .group:hover .product-card-media-zoom {
+
+  .group:hover .product-card-img-zoom {
     transform: none;
   }
 }
@@ -349,4 +356,61 @@ body {
   opacity: 0.03;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   z-index: 50;
+}
+
+/*
+ * Themed scrollbars — app-wide.
+ * Chrome 121+ disables ::-webkit-scrollbar when scrollbar-width/color is set on
+ * the same element, which falls back to the default light Windows scrollbar.
+ * WebKit rules for Chromium/Safari; standard props only in @supports for Firefox.
+ */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-track-piece {
+  background: var(--lagari-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--lagari-scrollbar-thumb);
+  border: 2px solid var(--lagari-scrollbar-track);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lagari-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--lagari-scrollbar-thumb-active);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--lagari-scrollbar-track);
+}
+
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-button:single-button,
+::-webkit-scrollbar-button:single-button:horizontal:decrement,
+::-webkit-scrollbar-button:single-button:horizontal:increment,
+::-webkit-scrollbar-button:single-button:vertical:decrement,
+::-webkit-scrollbar-button:single-button:vertical:increment {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  html,
+  body,
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-auto {
+    scrollbar-width: thin;
+    scrollbar-color: var(--lagari-scrollbar-thumb) var(--lagari-scrollbar-track);
+  }
 }

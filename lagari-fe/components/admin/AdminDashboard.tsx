@@ -1,66 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import {
-  fetchAdminMetrics,
-  fetchAdminOrders,
-  type AdminMetrics,
-  type AdminOrderRow,
-} from "@/lib/api/admin";
-import { AdminOrderRow as AdminOrderRowComponent } from "@/components/admin/AdminOrderRow";
+import { AdminOrderCard, AdminOrderTableRows } from "@/components/admin/AdminOrderRow";
+import { AdminPageToolbar } from "@/components/admin/AdminRefreshButton";
 import {
   ADMIN_ANALYTICS_PATH,
   ADMIN_ORDERS_PATH,
   ADMIN_PRODUCTS_PATH,
 } from "@/lib/admin/constants";
-import { useAdminAuth } from "@/lib/admin/admin-auth-context";
-import { getValidAccessToken } from "@/lib/admin/token-storage";
+import { adminKeys } from "@/lib/admin/admin-query-keys";
+import { useAdminMetrics, useAdminOrders } from "@/lib/admin/hooks/use-admin-queries";
 import { formatPkr } from "@/lib/format";
 
+const recentOrdersParams = { limit: 10 };
+
 export function AdminDashboard() {
-  const { accessToken } = useAdminAuth();
-  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
-  const [orders, setOrders] = useState<AdminOrderRow[]>([]);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const metricsQuery = useAdminMetrics();
+  const ordersQuery = useAdminOrders(recentOrdersParams);
 
-  useEffect(() => {
-    const token = getValidAccessToken() ?? accessToken;
-    if (!token) return;
-    const authToken = token;
-
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const [m, o] = await Promise.all([
-          fetchAdminMetrics(authToken),
-          fetchAdminOrders(authToken, { limit: 10 }),
-        ]);
-        if (!cancelled) {
-          setMetrics(m);
-          setOrders(o.orders);
-          setLoadError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setLoadError("Could not load admin data.");
-        }
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
+  const metrics = metricsQuery.data;
+  const orders = ordersQuery.data?.orders ?? [];
+  const loadError =
+    metricsQuery.error || ordersQuery.error
+      ? "Could not load admin data."
+      : null;
 
   return (
     <div>
-      <h1 className="font-display text-3xl font-semibold">Dashboard</h1>
-      <p className="mt-2 text-sm text-lagari-muted">
-        Overview and quick links to operations.
-      </p>
+      <AdminPageToolbar
+        title="Dashboard"
+        description="Overview and quick links to operations."
+        queryKey={[adminKeys.metrics(), adminKeys.orders(recentOrdersParams)]}
+      />
 
       {loadError && (
         <p className="mt-4 text-sm text-red-600" role="alert">
@@ -71,46 +42,77 @@ export function AdminDashboard() {
       {metrics && (
         <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <MetricCard label="Orders today" value={String(metrics.ordersToday)} />
-          <MetricCard label="Revenue today" value={formatPkr(metrics.revenueTodayPkr)} />
-          <MetricCard label="Pending orders" value={String(metrics.pendingOrders)} href={ADMIN_ORDERS_PATH} />
-          <MetricCard label="Low stock SKUs" value={String(metrics.lowStockCount)} href={ADMIN_PRODUCTS_PATH} />
-          <MetricCard label="Active sessions" value={String(metrics.activeSessions)} href={ADMIN_ANALYTICS_PATH} />
+          <MetricCard
+            label="Revenue today"
+            value={formatPkr(metrics.revenueTodayPkr)}
+          />
+          <MetricCard
+            label="Pending orders"
+            value={String(metrics.pendingOrders)}
+            href={ADMIN_ORDERS_PATH}
+          />
+          <MetricCard
+            label="Low stock SKUs"
+            value={String(metrics.lowStockCount)}
+            href={ADMIN_PRODUCTS_PATH}
+          />
+          <MetricCard
+            label="Active sessions"
+            value={String(metrics.activeSessions)}
+            href={ADMIN_ANALYTICS_PATH}
+          />
         </dl>
       )}
 
       <section className="mt-12">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-xl font-semibold">Recent orders</h2>
-          <Link href={ADMIN_ORDERS_PATH} className="text-sm font-medium text-lagari-brass hover:underline">
+          <Link
+            href={ADMIN_ORDERS_PATH}
+            className="text-sm font-medium text-lagari-brass hover:underline"
+          >
             View all
           </Link>
         </div>
-        {orders.length === 0 ? (
+        {ordersQuery.isLoading ? (
+          <p className="mt-4 text-lagari-muted">Loading…</p>
+        ) : orders.length === 0 ? (
           <p className="mt-4 text-lagari-muted">No orders yet.</p>
         ) : (
-          <div className="admin-card mt-4 overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-lagari-border font-label text-lagari-brass-dim">
-                <tr>
-                  <th className="w-10 px-4 py-3" aria-label="Expand" />
-                  <th className="px-4 py-3">Order</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <AdminOrderRowComponent
-                    key={order.id}
-                    order={order}
-                    variant="dashboard"
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="hidden lg:block admin-card mt-4 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="border-b border-lagari-border font-label text-lagari-brass-dim">
+                  <tr>
+                    <th className="w-10 px-4 py-3" aria-label="Expand" />
+                    <th className="px-4 py-3">Order</th>
+                    <th className="px-4 py-3">Customer</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Total</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orders.map((order) => (
+                    <AdminOrderTableRows
+                      key={order.id}
+                      order={order}
+                      variant="dashboard"
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="mt-4 space-y-3 lg:hidden">
+              {orders.map((order) => (
+                <AdminOrderCard
+                  key={order.id}
+                  order={order}
+                  variant="dashboard"
+                />
+              ))}
+            </ul>
+          </>
         )}
       </section>
     </div>

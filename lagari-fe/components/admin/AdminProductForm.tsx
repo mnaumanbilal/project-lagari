@@ -3,21 +3,22 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AdminRefreshButton } from "@/components/admin/AdminRefreshButton";
 import { AdminTextField, AdminVariantField } from "@/components/admin/AdminField";
 import { AdminTaxonomyCheckboxes } from "@/components/admin/AdminTaxonomyCheckboxes";
 import { AdminProductImages, type ProductImageRow } from "@/components/admin/AdminProductImages";
 import { AdminRichTextEditor } from "@/components/admin/AdminRichTextEditor";
 import { sanitizeProductHtml } from "@/lib/admin/sanitize-html";
-import {
-  createAdminProduct,
-  fetchAdminProduct,
-  updateAdminProduct,
-  type AdminProduct,
-} from "@/lib/api/admin";
 import { useAdminToast } from "@/lib/admin/admin-toast-context";
 import { ADMIN_PRODUCTS_PATH } from "@/lib/admin/constants";
-import { useAdminAuth } from "@/lib/admin/admin-auth-context";
-import { getValidAccessToken } from "@/lib/admin/token-storage";
+import { adminKeys } from "@/lib/admin/admin-query-keys";
+import {
+  useCreateAdminProduct,
+  useDeleteAdminProduct,
+  useUpdateAdminProduct,
+} from "@/lib/admin/hooks/use-admin-mutations";
+import { AdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
+import { useAdminProduct } from "@/lib/admin/hooks/use-admin-queries";
 import { ApiError } from "@/lib/api/client";
 import {
   applyFieldErrors,
@@ -41,9 +42,12 @@ export function AdminProductForm({ productId }: Props) {
   const router = useRouter();
   const { error: toastError, success: toastSuccess, warning: toastWarning } =
     useAdminToast();
-  const { accessToken } = useAdminAuth();
-  const [loading, setLoading] = useState(!!productId);
-  const [submitting, setSubmitting] = useState(false);
+  const productQuery = useAdminProduct(productId);
+  const createMutation = useCreateAdminProduct();
+  const updateMutation = useUpdateAdminProduct(productId ?? "");
+  const deleteMutation = useDeleteAdminProduct();
+  const [hydrated, setHydrated] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
@@ -59,61 +63,49 @@ export function AdminProductForm({ productId }: Props) {
 
   useEffect(() => {
     if (!productId) {
-      setLoading(false);
+      setHydrated(true);
       return;
     }
+    const p = productQuery.data;
+    if (!p) return;
 
-    const token = getValidAccessToken() ?? accessToken;
-    if (!token) return;
+    setSlug(p.slug);
+    setTitle(p.title);
+    setDescription(p.description ?? "");
+    setDesignerInspiration(p.designerInspiration ?? "");
+    setIsPublished(!!p.isPublished);
+    setCategorySlugs(p.categories ?? []);
+    setNoteTagSlugs(p.noteTags ?? []);
+    setImages(
+      (p.images ?? []).map((i, idx) => ({
+        url: i.url,
+        isHero: i.isHero ?? idx === 0,
+        sortOrder: i.sortOrder ?? idx,
+      })),
+    );
+    setVariants(
+      (p.variants ?? []).map((v) => ({
+        id: v.id,
+        sku: v.sku ?? "",
+        name: v.name,
+        pricePkr: v.pricePkr,
+        compareAtPricePkr: v.compareAtPricePkr ?? null,
+        stock: v.stock ?? 0,
+        isActive: v.isActive !== false,
+      })),
+    );
+    setFieldErrors({});
+    setHydrated(true);
+  }, [productId, productQuery.data]);
 
-    let cancelled = false;
-    setLoading(true);
-
-    fetchAdminProduct(token, productId)
-      .then((p: AdminProduct) => {
-        if (cancelled) return;
-        setSlug(p.slug);
-        setTitle(p.title);
-        setDescription(p.description ?? "");
-        setDesignerInspiration(p.designerInspiration ?? "");
-        setIsPublished(!!p.isPublished);
-        setCategorySlugs(p.categories ?? []);
-        setNoteTagSlugs(p.noteTags ?? []);
-        setImages(
-          (p.images ?? []).map((i, idx) => ({
-            url: i.url,
-            isHero: i.isHero ?? idx === 0,
-            sortOrder: i.sortOrder ?? idx,
-          })),
-        );
-        setVariants(
-          (p.variants ?? []).map((v) => ({
-            id: v.id,
-            sku: v.sku ?? "",
-            name: v.name,
-            pricePkr: v.pricePkr,
-            compareAtPricePkr: v.compareAtPricePkr ?? null,
-            stock: v.stock ?? 0,
-            isActive: v.isActive !== false,
-          })),
-        );
-        setFieldErrors({});
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const message =
-          err instanceof ApiError ? err.message : "Could not load product.";
-        toastError(message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // toastError intentionally omitted — stable after toast context fix
-  }, [productId, accessToken]);
+  useEffect(() => {
+    if (productQuery.error) {
+      const err = productQuery.error;
+      const message =
+        err instanceof ApiError ? err.message : "Could not load product.";
+      toastError(message);
+    }
+  }, [productQuery.error, toastError]);
 
   function buildPayload() {
     const activeVariants = variants
@@ -148,11 +140,6 @@ export function AdminProductForm({ productId }: Props) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const token = getValidAccessToken() ?? accessToken;
-    if (!token) {
-      toastError("Session expired. Sign in again.");
-      return;
-    }
 
     const clientErrors = validateProductForm({
       slug,
@@ -176,16 +163,15 @@ export function AdminProductForm({ productId }: Props) {
     }
 
     setFieldErrors({});
-    setSubmitting(true);
 
     try {
       const payload = buildPayload();
       if (productId) {
-        await updateAdminProduct(token, productId, payload);
+        await updateMutation.mutateAsync(payload);
         toastSuccess("Product updated.");
         router.push(ADMIN_PRODUCTS_PATH);
       } else {
-        const created = await createAdminProduct(token, payload);
+        const created = await createMutation.mutateAsync(payload);
         toastSuccess("Product created.");
         router.push(`/admin-panel-route/products/${created.id}/edit`);
       }
@@ -206,11 +192,24 @@ export function AdminProductForm({ productId }: Props) {
       } else {
         toastError("Could not save product. Try again.");
       }
-    } finally {
-      setSubmitting(false);
     }
   }
 
+  const submitting = createMutation.isPending || updateMutation.isPending;
+  const loading = !!productId && (productQuery.isLoading || !hydrated);
+
+  async function handleDeleteProduct() {
+    if (!productId) return;
+    try {
+      await deleteMutation.mutateAsync(productId);
+      toastSuccess(`"${title}" removed from the shop.`);
+      router.push(ADMIN_PRODUCTS_PATH);
+    } catch {
+      toastError("Could not delete product.");
+    } finally {
+      setConfirmDelete(false);
+    }
+  }
   const variantsError = getFieldError(fieldErrors, "variants");
   const variantsInvalid = hasFieldError(fieldErrors, "variants");
   const visibleFieldErrors = Object.entries(fieldErrors).filter(
@@ -221,9 +220,17 @@ export function AdminProductForm({ productId }: Props) {
 
   return (
     <div>
-      <Link href={ADMIN_PRODUCTS_PATH} className="text-sm font-medium text-lagari-brass hover:underline">
-        ← Products
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href={ADMIN_PRODUCTS_PATH}
+          className="text-sm font-medium text-lagari-brass hover:underline"
+        >
+          ← Products
+        </Link>
+        {productId ? (
+          <AdminRefreshButton queryKey={adminKeys.product(productId)} />
+        ) : null}
+      </div>
       <h1 className="font-display mt-4 text-3xl font-semibold">
         {productId ? "Edit product" : "New product"}
       </h1>
@@ -329,6 +336,8 @@ export function AdminProductForm({ productId }: Props) {
           <h2 className="font-display text-lg font-semibold">Variants</h2>
           <p className="mt-1 text-xs text-lagari-muted">
             Each size or concentration is a variant with its own SKU, price, and stock.
+            To put a variant on sale, set <strong className="text-lagari-primary">Sale price</strong> lower
+            than <strong className="text-lagari-primary">Compare-at price</strong> (the original price).
           </p>
           {variantsError && (
             <p className="admin-field-error mt-2" role="alert">
@@ -372,14 +381,14 @@ export function AdminProductForm({ productId }: Props) {
                 }}
               />
               <AdminVariantField
-                label="Price PKR"
+                label="Sale price (PKR)"
                 fieldKey="pricePkr"
                 variantIndex={idx}
                 errors={fieldErrors}
                 inputProps={{
                   type: "number",
                   min: 0,
-                  placeholder: "Price PKR",
+                  placeholder: "Current selling price",
                   value: v.pricePkr,
                   onChange: (e) => {
                     const next = [...variants];
@@ -388,6 +397,38 @@ export function AdminProductForm({ productId }: Props) {
                   },
                 }}
               />
+              <AdminVariantField
+                label="Compare-at price (PKR)"
+                fieldKey="compareAtPricePkr"
+                variantIndex={idx}
+                errors={fieldErrors}
+                inputProps={{
+                  type: "number",
+                  min: 0,
+                  placeholder: "Original price (optional)",
+                  value: v.compareAtPricePkr ?? "",
+                  onChange: (e) => {
+                    const next = [...variants];
+                    const raw = e.target.value;
+                    next[idx] = {
+                      ...v,
+                      compareAtPricePkr: raw === "" ? null : Number(raw),
+                    };
+                    setVariants(next);
+                  },
+                }}
+              />
+              {v.compareAtPricePkr != null &&
+              v.compareAtPricePkr > v.pricePkr &&
+              v.pricePkr > 0 ? (
+                <p className="sm:col-span-2 text-xs text-lagari-brass">
+                  On sale —{" "}
+                  {Math.round(
+                    ((v.compareAtPricePkr - v.pricePkr) / v.compareAtPricePkr) * 100,
+                  )}
+                  % off ({v.compareAtPricePkr - v.pricePkr} PKR saved)
+                </p>
+              ) : null}
               <AdminVariantField
                 label="Stock"
                 fieldKey="stock"
@@ -437,6 +478,37 @@ export function AdminProductForm({ productId }: Props) {
           {submitting ? "Saving…" : "Save product"}
         </button>
       </form>
+
+      {productId ? (
+        <section className="admin-card mt-10 max-w-2xl border border-lagari-danger/30 p-5">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-lagari-danger">
+            Danger zone
+          </h2>
+          <p className="mt-2 text-sm text-lagari-muted">
+            Delete this product from the shop. It will be unpublished and hidden.
+            Order history is kept.
+          </p>
+          <button
+            type="button"
+            disabled={deleteMutation.isPending}
+            onClick={() => setConfirmDelete(true)}
+            className="admin-btn mt-4 rounded-sm border border-lagari-danger/50 px-4 py-2 text-sm text-lagari-danger hover:bg-lagari-danger/10 disabled:opacity-50"
+          >
+            Delete product
+          </button>
+        </section>
+      ) : null}
+
+      <AdminConfirmDialog
+        open={confirmDelete}
+        title={`Delete "${title}"?`}
+        description="Remove this product from the shop? It will be unpublished and hidden. Order history is kept."
+        confirmLabel="Delete product"
+        variant="destructive"
+        busy={deleteMutation.isPending}
+        onConfirm={() => void handleDeleteProduct()}
+        onCancel={() => !deleteMutation.isPending && setConfirmDelete(false)}
+      />
     </div>
   );
 }

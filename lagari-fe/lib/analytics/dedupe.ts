@@ -84,3 +84,35 @@ export function shouldTrackSearch(query: string): boolean {
   writeJsonMap(SEARCH_DEDUP_KEY, map);
   return true;
 }
+
+/** Once per variant per PKT calendar day. */
+export function shouldTrackAddToCart(variantId: string): boolean {
+  const day = pktDateString();
+  const map = readJsonMap(PRODUCT_VIEW_KEY);
+  const key = `cart:${day}:${variantId}`;
+  if (map[key]) return false;
+  map[key] = "1";
+  writeJsonMap(PRODUCT_VIEW_KEY, map);
+  return true;
+}
+
+export function shouldTrackCartDrawerOpen(): boolean {
+  const key = "cart_drawer_open";
+  if (hasFlag(key)) return false;
+  setFlag(key);
+  return true;
+}
+
+export function shouldTrackVariantSelect(productSlug: string, variantId: string): boolean {
+  const key = `variant:${productSlug}:${variantId}`;
+  if (hasFlag(key)) return false;
+  setFlag(key);
+  return true;
+}
+
+export function shouldTrackNoteFilter(note: string): boolean {
+  const key = `note:${note}`;
+  if (hasFlag(key)) return false;
+  setFlag(key);
+  return true;
+}

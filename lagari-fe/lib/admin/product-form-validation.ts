@@ -5,6 +5,7 @@ export type ProductVariantInput = {
   sku: string;
   name: string;
   pricePkr: number;
+  compareAtPricePkr?: number | null;
   stock: number;
 };
 
@@ -60,6 +61,18 @@ export function validateProductForm(values: ProductFormValues): FieldErrors {
         errors[`variants.${idx}.pricePkr`] = "Enter a valid price.";
       } else if (!Number.isInteger(v.pricePkr)) {
         errors[`variants.${idx}.pricePkr`] = "Price must be a whole number (PKR).";
+      }
+      const compare = v.compareAtPricePkr;
+      if (compare != null) {
+        if (compare < 0 || Number.isNaN(compare)) {
+          errors[`variants.${idx}.compareAtPricePkr`] = "Enter a valid compare-at price.";
+        } else if (!Number.isInteger(compare)) {
+          errors[`variants.${idx}.compareAtPricePkr`] =
+            "Compare-at price must be a whole number (PKR).";
+        } else if (compare <= v.pricePkr) {
+          errors[`variants.${idx}.compareAtPricePkr`] =
+            "Compare-at price must be higher than the sale price.";
+        }
       }
       if (v.stock < 0 || Number.isNaN(v.stock)) {
         errors[`variants.${idx}.stock`] = "Stock cannot be negative.";

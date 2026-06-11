@@ -4,11 +4,15 @@ import { API_BASE_URL, USE_API } from "@/lib/api/config";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/event-names";
 import {
   markOrderPlaced,
+  shouldTrackAddToCart,
+  shouldTrackCartDrawerOpen,
   shouldTrackCategoryView,
   shouldTrackCheckoutAbandon,
   shouldTrackCheckoutStart,
+  shouldTrackNoteFilter,
   shouldTrackProductView,
   shouldTrackSearch,
+  shouldTrackVariantSelect,
 } from "@/lib/analytics/dedupe";
 
 export type AnalyticsEventInput = {
@@ -120,6 +124,7 @@ export function trackAddToCart(payload: {
   variantId: string;
   qty: number;
 }) {
+  if (!shouldTrackAddToCart(payload.variantId)) return;
   trackEvent({ eventName: ANALYTICS_EVENTS.ADD_TO_CART, payload });
 }
 
@@ -159,4 +164,28 @@ export function trackSearch(query: string) {
 export function trackCategoryView(category: string) {
   if (!shouldTrackCategoryView(category)) return;
   trackEvent({ eventName: ANALYTICS_EVENTS.CATEGORY_VIEW, payload: { category } });
+}
+
+export function trackCartDrawerOpen(itemCount: number) {
+  if (!shouldTrackCartDrawerOpen()) return;
+  trackEvent({
+    eventName: ANALYTICS_EVENTS.CART_DRAWER_OPEN,
+    payload: { itemCount },
+  });
+}
+
+export function trackVariantSelect(productSlug: string, variantId: string) {
+  if (!shouldTrackVariantSelect(productSlug, variantId)) return;
+  trackEvent({
+    eventName: ANALYTICS_EVENTS.VARIANT_SELECT,
+    payload: { productSlug, variantId },
+  });
+}
+
+export function trackNoteFilterApply(note: string) {
+  if (!shouldTrackNoteFilter(note)) return;
+  trackEvent({
+    eventName: ANALYTICS_EVENTS.NOTE_FILTER_APPLY,
+    payload: { note },
+  });
 }

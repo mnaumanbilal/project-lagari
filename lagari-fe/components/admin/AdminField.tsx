@@ -109,7 +109,7 @@ export function AdminVariantField({
   inputProps,
 }: {
   label: string;
-  fieldKey: "sku" | "name" | "pricePkr" | "stock";
+  fieldKey: "sku" | "name" | "pricePkr" | "compareAtPricePkr" | "stock";
   variantIndex: number;
   errors?: FieldErrors;
   inputProps: InputHTMLAttributes<HTMLInputElement>;

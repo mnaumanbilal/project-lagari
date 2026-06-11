@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { CartDrawer } from "@/components/storefront/CartDrawer";
 import { LagariLogo } from "@/components/brand/LagariLogo";
+import { trackCartDrawerOpen } from "@/lib/analytics/event-buffer";
 import { useCart } from "@/lib/cart/cart-context";
 import { CATEGORY_LABELS, type ProductCategory } from "@/lib/catalog";
 
@@ -130,7 +131,10 @@ export function SiteHeader() {
             </button>
             <button
               type="button"
-              onClick={() => setBagOpen(true)}
+              onClick={() => {
+                setBagOpen(true);
+                trackCartDrawerOpen(itemCount);
+              }}
               className="relative rounded-full border border-lagari-brass/40 bg-lagari-surface px-4 py-2 font-label text-lagari-brass transition-colors hover:bg-lagari-brass hover:text-lagari-deep"
             >
               Bag

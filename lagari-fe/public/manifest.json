@@ -1,0 +1,17 @@
+{
+  "name": "Lagari",
+  "short_name": "Lagari",
+  "description": "Luxury fragrance impressions — order updates and shop alerts.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0908",
+  "theme_color": "#0a0908",
+  "icons": [
+    {
+      "src": "/window.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

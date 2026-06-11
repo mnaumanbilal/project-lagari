@@ -11,6 +11,12 @@ import {
 } from "../db/models";
 import { AppError } from "../middleware/errorHandler";
 import { clearCart, getCart } from "./cart.service";
+import { checkVariantLowStock } from "./inventory-alert.service";
+import { notifyCustomerOrderEvent } from "./customer-notification.service";
+import {
+  notifyOrderPlaced,
+  notifyOrderStatusChanged,
+} from "./notification.service";
 
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ["confirmed", "rto", "cancelled"],
@@ -70,6 +76,7 @@ export function mapOrderSummary(order: OrderWithRelations) {
     itemCount,
     itemPreview,
     createdAt: order.createdAt,
+    archivedAt: order.archivedAt,
   };
 }
 
@@ -88,6 +95,7 @@ export function mapOrderDetail(order: OrderWithRelations) {
     courierName: order.courierName,
     trackingNumber: order.trackingNumber,
     adminNotes: order.adminNotes,
+    cancelReason: order.cancelReason,
     items: items.map((item) => ({
       id: item.id,
       variantId: item.variantId,
@@ -124,14 +132,22 @@ export async function listAdminOrders(params: {
   search?: string;
   page?: number;
   limit?: number;
+  archived?: "true" | "false" | "all";
 }) {
-  const limit = Math.min(Math.max(params.limit ?? 50, 1), 100);
+  const limit = Math.min(Math.max(params.limit ?? 25, 1), 100);
   const page = Math.max(params.page ?? 1, 1);
   const offset = (page - 1) * limit;
 
   const where: WhereOptions = {};
   if (params.status) {
     where.status = params.status;
+  }
+
+  const archivedFilter = params.archived ?? "false";
+  if (archivedFilter === "true") {
+    where.archivedAt = { [Op.ne]: null };
+  } else if (archivedFilter === "false") {
+    where.archivedAt = null;
   }
 
   const search = params.search?.trim();
@@ -184,18 +200,22 @@ export async function updateOrderStatus(input: {
   toStatus: OrderStatus;
   actorAdminId: string | null;
   note?: string;
+  cancelReason?: string;
   courierName?: string;
   trackingNumber?: string;
 }) {
   return sequelize.transaction(async (transaction) => {
     const order = await Order.findByPk(input.orderId, {
-      include: [{ association: "items" }, { association: "customer" }],
       transaction,
       lock: transaction.LOCK.UPDATE,
     });
     if (!order) {
       throw new AppError(404, "Order not found");
     }
+
+    const customer = order.customerId
+      ? await Customer.findByPk(order.customerId, { transaction })
+      : null;
 
     const fromStatus = order.status;
     const allowed = ALLOWED_TRANSITIONS[fromStatus] ?? [];
@@ -224,13 +244,20 @@ export async function updateOrderStatus(input: {
       );
     }
 
-    await order.update({ status: input.toStatus }, { transaction });
+    await order.update(
+      {
+        status: input.toStatus,
+        ...(input.toStatus === "cancelled"
+          ? { cancelReason: input.cancelReason?.trim() || null }
+          : {}),
+      },
+      { transaction },
+    );
 
     if (input.toStatus === "cancelled" || input.toStatus === "rto") {
       await restoreOrderStock(order.id, transaction);
     }
 
-    const customer = (order as OrderWithRelations).customer;
     if (input.toStatus === "rto" && customer) {
       await customer.increment("rtoCount", { by: 1, transaction });
     }
@@ -257,7 +284,19 @@ export async function updateOrderStatus(input: {
       include: ORDER_INCLUDES,
       transaction,
     });
-    return mapOrderDetail(detail as OrderWithRelations);
+
+    const mapped = mapOrderDetail(detail as OrderWithRelations);
+    void notifyOrderStatusChanged({
+      orderId: order.id,
+      fromStatus,
+      toStatus: input.toStatus,
+    }).catch((err) => console.error("order status notification failed:", err));
+
+    void notifyCustomerOrderEvent(order.id, input.toStatus).catch((err) =>
+      console.error("customer order notification failed:", err),
+    );
+
+    return mapped;
   });
 }
 
@@ -268,6 +307,36 @@ export async function updateAdminOrderNotes(orderId: string, adminNotes: string 
   }
   await order.update({ adminNotes: adminNotes?.trim() || null });
   return getAdminOrderById(orderId);
+}
+
+export type BulkActionResult = {
+  succeeded: number;
+  failed: Array<{ id: string; error: string }>;
+};
+
+export async function archiveOrder(orderId: string, archived: boolean) {
+  const order = await Order.findByPk(orderId);
+  if (!order) throw new AppError(404, "Order not found");
+  await order.update({ archivedAt: archived ? new Date() : null });
+  return getAdminOrderById(orderId);
+}
+
+export async function bulkArchiveOrders(
+  ids: string[],
+  archived: boolean,
+): Promise<BulkActionResult> {
+  const result: BulkActionResult = { succeeded: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      await archiveOrder(id, archived);
+      result.succeeded += 1;
+    } catch (err) {
+      const message =
+        err instanceof AppError ? err.message : "Could not archive order";
+      result.failed.push({ id, error: message });
+    }
+  }
+  return result;
 }
 
 export async function placeCodOrder(input: {
@@ -314,6 +383,8 @@ export async function placeCodOrder(input: {
       { transaction: t },
     );
 
+    const lowStockVariantIds: string[] = [];
+
     for (const line of cart.items) {
       const variant = await ProductVariant.findByPk(line.variantId, {
         include: [{ model: Product, as: "product" }],
@@ -324,6 +395,7 @@ export async function placeCodOrder(input: {
       }
 
       await variant.decrement("stock", { by: line.quantity, transaction: t });
+      lowStockVariantIds.push(variant.id);
 
       await OrderItem.create(
         {
@@ -352,10 +424,26 @@ export async function placeCodOrder(input: {
 
     await clearCart(input.sessionId);
 
-    return {
+    const result = {
       orderId: order.id,
       orderNumber: order.orderNumber,
       totalPkr: order.totalPkr,
     };
+
+    void notifyOrderPlaced({ orderId: order.id }).catch((err) =>
+      console.error("order placed notification failed:", err),
+    );
+
+    void notifyCustomerOrderEvent(order.id, "placed").catch((err) =>
+      console.error("customer order notification failed:", err),
+    );
+
+    for (const variantId of lowStockVariantIds) {
+      void checkVariantLowStock(variantId).catch((err) =>
+        console.error("low stock check failed:", err),
+      );
+    }
+
+    return result;
   });
 }

@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { CategoryOption, NoteTagOption } from "@/lib/types/catalog";
+import { trackNoteFilterApply } from "@/lib/analytics/event-buffer";
 
 function buildHref(category: string, note?: string, q?: string) {
   const params = new URLSearchParams();
@@ -68,6 +71,7 @@ export function ShopFilters({
           <Link
             key={n.slug}
             href={buildHref(activeCategory, n.slug, activeQuery)}
+            onClick={() => trackNoteFilterApply(n.slug)}
             className={`rounded-sm border px-3 py-1.5 font-label text-xs transition-colors ${
               activeNote === n.slug
                 ? "border-lagari-brass text-lagari-brass"

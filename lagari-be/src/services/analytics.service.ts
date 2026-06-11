@@ -7,6 +7,7 @@ import {
   AnalyticsVisitor,
   Order,
 } from "../db/models";
+import type { AnalyticsRange } from "../utils/analytics-range";
 import {
   ANALYTICS_EVENT_NAMES,
   computeDedupKey,
@@ -14,17 +15,13 @@ import {
   pktBucketDate,
 } from "../utils/analytics-dedup";
 
-function parseRange(days: number) {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - days);
-  from.setHours(0, 0, 0, 0);
-  return { from, to };
-}
-
 function pct(numerator: number, denominator: number): number {
   if (denominator <= 0) return 0;
   return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+function pctCap(numerator: number, denominator: number): number {
+  return Math.min(100, pct(numerator, denominator));
 }
 
 export async function ingestEventBatch(
@@ -91,8 +88,8 @@ export async function countActiveSessions(): Promise<number> {
   });
 }
 
-export async function getAnalyticsOverview(days = 7) {
-  const { from, to } = parseRange(days);
+export async function getAnalyticsOverview(range: AnalyticsRange) {
+  const { from, to, label, preset } = range;
 
   const uniqueVisitors = await AnalyticsSession.count({
     where: {
@@ -128,7 +125,9 @@ export async function getAnalyticsOverview(days = 7) {
   const funnelRows = await sequelize.query<{
     product_view_sessions: string;
     add_to_cart_sessions: string;
+    view_then_cart_sessions: string;
     checkout_starts: string;
+    cart_then_checkout_sessions: string;
     checkout_conversions: string;
     order_placed_sessions: string;
   }>(
@@ -157,17 +156,22 @@ export async function getAnalyticsOverview(days = 7) {
       WHERE e.event_name = 'order_placed'
         AND e.created_at >= :from AND e.created_at <= :to
     ),
-    cart_no_checkout AS (
-      SELECT a.session_id
+    view_then_cart AS (
+      SELECT DISTINCT v.session_id
+      FROM product_views v
+      INNER JOIN add_to_cart a ON a.session_id = v.session_id
+    ),
+    cart_then_checkout AS (
+      SELECT DISTINCT a.session_id
       FROM add_to_cart a
-      WHERE NOT EXISTS (
-        SELECT 1 FROM checkout_starts c WHERE c.session_id = a.session_id
-      )
+      INNER JOIN checkout_starts c ON c.session_id = a.session_id
     )
     SELECT
       (SELECT COUNT(*)::text FROM product_views) AS product_view_sessions,
       (SELECT COUNT(*)::text FROM add_to_cart) AS add_to_cart_sessions,
+      (SELECT COUNT(*)::text FROM view_then_cart) AS view_then_cart_sessions,
       (SELECT COUNT(*)::text FROM checkout_starts) AS checkout_starts,
+      (SELECT COUNT(*)::text FROM cart_then_checkout) AS cart_then_checkout_sessions,
       (SELECT COUNT(*)::text FROM checkout_starts s WHERE EXISTS (
         SELECT 1 FROM orders_placed p WHERE p.session_id = s.session_id
       )) AS checkout_conversions,
@@ -179,7 +183,9 @@ export async function getAnalyticsOverview(days = 7) {
   const funnel = funnelRows[0];
   const productViewSessions = Number(funnel?.product_view_sessions ?? 0);
   const addToCartSessions = Number(funnel?.add_to_cart_sessions ?? 0);
+  const viewThenCartSessions = Number(funnel?.view_then_cart_sessions ?? 0);
   const checkoutStarts = Number(funnel?.checkout_starts ?? 0);
+  const cartThenCheckoutSessions = Number(funnel?.cart_then_checkout_sessions ?? 0);
   const checkoutConversions = Number(funnel?.checkout_conversions ?? 0);
   const orderPlacedSessions = Number(funnel?.order_placed_sessions ?? 0);
 
@@ -303,13 +309,25 @@ export async function getAnalyticsOverview(days = 7) {
 
   const cartDropOffRate = pct(checkoutStarts - checkoutConversions, checkoutStarts);
   const checkoutConversionRate = pct(checkoutConversions, checkoutStarts);
-  const viewToCartRate = pct(addToCartSessions, productViewSessions);
-  const cartToCheckoutRate = pct(checkoutStarts, addToCartSessions);
+  const viewToCartRate = pct(viewThenCartSessions, productViewSessions);
+  const cartToCheckoutRate = pct(cartThenCheckoutSessions, addToCartSessions);
   const cartAbandonmentRate = pct(cartAbandonSessions, addToCartSessions);
-  const overallConversionRate = pct(orderPlacedSessions, uniqueVisitors);
+  const overallConversionRate = pctCap(orderPlacedSessions, uniqueVisitors);
+
+  const dataQualityWarnings: string[] = [];
+  if (ordersPlacedInRange > 0 && orderPlacedSessions > 0) {
+    const diff = Math.abs(ordersPlacedInRange - orderPlacedSessions);
+    const pctDiff = (diff / ordersPlacedInRange) * 100;
+    if (pctDiff > 5) {
+      dataQualityWarnings.push(
+        `Order events (${orderPlacedSessions}) differ from orders table (${ordersPlacedInRange}) by ${Math.round(pctDiff)}%.`,
+      );
+    }
+  }
 
   return {
-    rangeDays: days,
+    preset: preset ?? null,
+    label,
     from: from.toISOString(),
     to: to.toISOString(),
     uniqueVisitors,
@@ -320,7 +338,9 @@ export async function getAnalyticsOverview(days = 7) {
     ordersPlacedInRange,
     productViewSessions,
     addToCartSessions,
+    viewThenCartSessions,
     checkoutStarts,
+    cartThenCheckoutSessions,
     checkoutConversions,
     orderPlacedSessions,
     cartDropOffRate,
@@ -329,6 +349,7 @@ export async function getAnalyticsOverview(days = 7) {
     cartToCheckoutRate,
     cartAbandonmentRate,
     overallConversionRate,
+    dataQualityWarnings,
     topProducts: topProducts.map((r) => ({
       productSlug: r.product_slug,
       productId: r.product_id,
@@ -345,7 +366,6 @@ export async function getAnalyticsOverview(days = 7) {
       category: r.category,
       uniqueSessions: Number(r.unique_sessions),
     })),
-    // Legacy field for backward compatibility
     topProductsByViews: topProducts.map((r) => ({
       productSlug: r.product_slug,
       views: Number(r.total_views),

@@ -31,6 +31,11 @@
 - Use `@cursor-memory-bank` for memory bank workflow.
 - Storefront UX: `@frontend-design`; implementation: `@frontend-developer` (override Next version with `lagari-fe/AGENTS.md`).
 
+## Backend notifications
+
+- **Admin order emails** (`lagari-be/src/templates/admin-notification-email.ts`, `services/admin-order-email.ts`) must include the **full order snapshot**: customer name/phone/email, full address, line items with qty and prices, subtotal/discount/total, status, tracking, cancel reason, notes. Load via `loadAdminOrderSnapshot(orderId)` — never send sparse order admin emails.
+- Admin links use `env.domain` (`DOMAIN` in `.env`, e.g. `https://www.lagari.pk`).
+
 ## Implementation gate
 
 - **No** `lagari-be` or commerce UI until user approves P1 plan and says **execute** for P2+.

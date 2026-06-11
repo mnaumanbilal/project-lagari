@@ -311,12 +311,14 @@ export interface OrderAttributes {
   courierName: string | null;
   trackingNumber: string | null;
   adminNotes: string | null;
+  cancelReason: string | null;
+  archivedAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 type OrderCreation = Optional<
   OrderAttributes,
-  "id" | "orderNumber" | "sessionId" | "discountPkr" | "notes" | "courierName" | "trackingNumber" | "adminNotes"
+  "id" | "orderNumber" | "sessionId" | "discountPkr" | "notes" | "courierName" | "trackingNumber" | "adminNotes" | "cancelReason" | "archivedAt"
 >;
 
 export class Order extends Model<OrderAttributes, OrderCreation> implements OrderAttributes {
@@ -336,6 +338,8 @@ export class Order extends Model<OrderAttributes, OrderCreation> implements Orde
   declare courierName: string | null;
   declare trackingNumber: string | null;
   declare adminNotes: string | null;
+  declare cancelReason: string | null;
+  declare archivedAt: Date | null;
 }
 Order.init(
   {
@@ -364,6 +368,8 @@ Order.init(
     courierName: { type: DataTypes.STRING, allowNull: true, field: "courier_name" },
     trackingNumber: { type: DataTypes.STRING, allowNull: true, field: "tracking_number" },
     adminNotes: { type: DataTypes.TEXT, allowNull: true, field: "admin_notes" },
+    cancelReason: { type: DataTypes.TEXT, allowNull: true, field: "cancel_reason" },
+    archivedAt: { type: DataTypes.DATE, allowNull: true, field: "archived_at" },
   },
   { sequelize, tableName: "orders", underscored: true },
 );
@@ -560,6 +566,97 @@ ProductReview.init(
   { sequelize, tableName: "product_reviews", underscored: true },
 );
 
+// --- AdminNotification ---
+export type AdminNotificationType =
+  | "order.placed"
+  | "order.status_changed"
+  | "inventory.low_stock"
+  | "product.updated"
+  | "review.submitted";
+
+export interface AdminNotificationAttributes {
+  id: string;
+  type: AdminNotificationType;
+  title: string;
+  body: string;
+  linkPath: string | null;
+  payload: Record<string, unknown> | null;
+  readAt: Date | null;
+}
+type NotificationCreation = Optional<
+  AdminNotificationAttributes,
+  "id" | "linkPath" | "payload" | "readAt"
+>;
+
+export class AdminNotification
+  extends Model<AdminNotificationAttributes, NotificationCreation>
+  implements AdminNotificationAttributes
+{
+  declare id: string;
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
+  declare type: AdminNotificationType;
+  declare title: string;
+  declare body: string;
+  declare linkPath: string | null;
+  declare payload: Record<string, unknown> | null;
+  declare readAt: Date | null;
+}
+AdminNotification.init(
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    type: { type: DataTypes.STRING(64), allowNull: false },
+    title: { type: DataTypes.STRING(255), allowNull: false },
+    body: { type: DataTypes.TEXT, allowNull: false },
+    linkPath: { type: DataTypes.STRING(512), allowNull: true, field: "link_path" },
+    payload: { type: DataTypes.JSONB, allowNull: true },
+    readAt: { type: DataTypes.DATE, allowNull: true, field: "read_at" },
+  },
+  { sequelize, tableName: "admin_notifications", underscored: true },
+);
+
+// --- CustomerPushSubscription ---
+export interface CustomerPushSubscriptionAttributes {
+  id: string;
+  sessionId: string;
+  customerId: string | null;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  userAgent: string | null;
+}
+type PushSubCreation = Optional<
+  CustomerPushSubscriptionAttributes,
+  "id" | "customerId" | "userAgent"
+>;
+
+export class CustomerPushSubscription
+  extends Model<CustomerPushSubscriptionAttributes, PushSubCreation>
+  implements CustomerPushSubscriptionAttributes
+{
+  declare id: string;
+  declare readonly createdAt: Date;
+  declare readonly updatedAt: Date;
+  declare sessionId: string;
+  declare customerId: string | null;
+  declare endpoint: string;
+  declare p256dh: string;
+  declare auth: string;
+  declare userAgent: string | null;
+}
+CustomerPushSubscription.init(
+  {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    sessionId: { type: DataTypes.UUID, allowNull: false, field: "session_id" },
+    customerId: { type: DataTypes.UUID, allowNull: true, field: "customer_id" },
+    endpoint: { type: DataTypes.TEXT, allowNull: false, unique: true },
+    p256dh: { type: DataTypes.TEXT, allowNull: false },
+    auth: { type: DataTypes.TEXT, allowNull: false },
+    userAgent: { type: DataTypes.STRING(512), allowNull: true, field: "user_agent" },
+  },
+  { sequelize, tableName: "customer_push_subscriptions", underscored: true },
+);
+
 // --- UrlRedirect ---
 export class UrlRedirect extends Model {
   declare id: string;
@@ -621,6 +718,15 @@ ProductReview.belongsTo(Product, { foreignKey: "product_id", as: "product" });
 Customer.hasMany(Order, { foreignKey: "customer_id", as: "orders" });
 Order.belongsTo(Customer, { foreignKey: "customer_id", as: "customer" });
 
+Customer.hasMany(CustomerPushSubscription, {
+  foreignKey: "customer_id",
+  as: "pushSubscriptions",
+});
+CustomerPushSubscription.belongsTo(Customer, {
+  foreignKey: "customer_id",
+  as: "customer",
+});
+
 Order.hasMany(OrderItem, { foreignKey: "order_id", as: "items" });
 OrderItem.belongsTo(Order, { foreignKey: "order_id", as: "order" });
 
@@ -665,5 +771,7 @@ export const db = {
   OrderTimelineEvent,
   AnalyticsEvent,
   ProductReview,
+  AdminNotification,
+  CustomerPushSubscription,
   UrlRedirect,
 };

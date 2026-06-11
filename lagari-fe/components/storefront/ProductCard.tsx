@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ProductCartActions } from "@/components/storefront/ProductCartActions";
+import { isProductOnSale, saleDiscountPercent } from "@/lib/catalog/pricing";
 import { formatPkr } from "@/lib/format";
 import { cloudinaryPresets } from "@/lib/media/cloudinary";
 import type { CatalogProduct } from "@/lib/types/catalog";
@@ -26,6 +27,11 @@ export function ProductCard({ product, featured = false }: ProductCardProps) {
     ? cloudinaryPresets.productCard(product.hoverImageUrl)
     : undefined;
   const hasHoverImage = Boolean(hover && hover !== hero);
+  const onSale = isProductOnSale(product);
+  const discountPct =
+    onSale && product.fromCompareAtPricePkr != null
+      ? saleDiscountPercent(product.fromPricePkr, product.fromCompareAtPricePkr)
+      : 0;
 
   return (
     <article
@@ -46,7 +52,12 @@ export function ProductCard({ product, featured = false }: ProductCardProps) {
               : "relative aspect-[4/5] w-full overflow-hidden"
           }
         >
-          <div className="product-card-media-zoom relative h-full w-full">
+          {onSale && (
+            <span className="pointer-events-none absolute bottom-2 right-2 z-20 rounded-sm bg-lagari-brass/95 px-1 py-px font-label text-[0.4rem] font-medium uppercase tracking-[0.08em] text-lagari-deep sm:bottom-2.5 sm:right-2.5 sm:px-1.5 sm:text-[0.625rem] sm:tracking-[0.1em]">
+              {discountPct > 0 ? `Sale · ${discountPct}%` : "Sale"}
+            </span>
+          )}
+          <div className="relative h-full w-full">
             <Image
               src={hero}
               alt={product.title}
@@ -56,7 +67,9 @@ export function ProductCard({ product, featured = false }: ProductCardProps) {
                   ? "(max-width:768px) 100vw, 50vw"
                   : "(max-width:768px) 50vw, 33vw"
               }
-              className={`object-cover ${
+              className={`${
+                hasHoverImage ? "" : "product-card-img-zoom"
+              } object-cover ${
                 hasHoverImage
                   ? "product-card-img-hover opacity-100 group-hover:opacity-0"
                   : ""
@@ -74,7 +87,7 @@ export function ProductCard({ product, featured = false }: ProductCardProps) {
                     ? "(max-width:768px) 100vw, 50vw"
                     : "(max-width:768px) 50vw, 33vw"
                 }
-                className="product-card-img-hover object-cover opacity-0 group-hover:opacity-100"
+                className="product-card-img-hover bg-white object-contain object-center p-2 opacity-0 group-hover:opacity-100 sm:p-3"
               />
             )}
           </div>

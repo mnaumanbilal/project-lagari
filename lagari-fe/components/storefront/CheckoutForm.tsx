@@ -73,6 +73,9 @@ export function CheckoutForm() {
         <p className="mt-4 text-sm text-lagari-muted">
           Our team will contact you shortly to confirm your COD shipment.
         </p>
+        <p className="mt-2 text-sm text-lagari-muted">
+          If you added an email, we&apos;ll send order updates there too.
+        </p>
         <Link
           href="/shop"
           className="mt-8 inline-block font-label text-lagari-brass hover:underline"
@@ -163,7 +166,9 @@ export function CheckoutForm() {
             />
           </label>
           <label className="block">
-            <span className="font-label text-lagari-brass-dim">Email (optional)</span>
+            <span className="font-label text-lagari-brass-dim">
+              Email for order updates (optional)
+            </span>
             <input
               name="email"
               type="email"

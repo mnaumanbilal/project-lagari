@@ -8,6 +8,8 @@ import {
 } from "../db/models";
 import { AppError } from "../middleware/errorHandler";
 import { sanitizeProductHtml } from "../utils/sanitizeHtml";
+import { checkVariantLowStock } from "./inventory-alert.service";
+import { notifyProductUpdated } from "./notification.service";
 
 export type VariantInput = {
   id?: string;
@@ -273,11 +275,49 @@ export async function updateProduct(id: string, input: Partial<ProductInput>) {
     }
   }
 
-  return getAdminProduct(id);
+  const updated = await getAdminProduct(id);
+
+  void notifyProductUpdated({
+    productId: id,
+    title: updated.title,
+    slug: updated.slug,
+  }).catch((err) => console.error("product update notification failed:", err));
+
+  if (input.variants) {
+    for (const variant of updated.variants) {
+      if (variant.isActive && variant.stock <= (variant.lowStockThreshold ?? 10)) {
+        void checkVariantLowStock(variant.id).catch((err) =>
+          console.error("low stock check failed:", err),
+        );
+      }
+    }
+  }
+
+  return updated;
 }
 
 export async function softDeleteProduct(id: string) {
   const product = await Product.findOne({ where: { id, deletedAt: null } });
   if (!product) throw new AppError(404, "Product not found");
   await product.update({ deletedAt: new Date(), isPublished: false });
+}
+
+export type BulkActionResult = {
+  succeeded: number;
+  failed: Array<{ id: string; error: string }>;
+};
+
+export async function bulkSoftDeleteProducts(ids: string[]): Promise<BulkActionResult> {
+  const result: BulkActionResult = { succeeded: 0, failed: [] };
+  for (const id of ids) {
+    try {
+      await softDeleteProduct(id);
+      result.succeeded += 1;
+    } catch (err) {
+      const message =
+        err instanceof AppError ? err.message : "Could not delete product";
+      result.failed.push({ id, error: message });
+    }
+  }
+  return result;
 }

@@ -40,7 +40,7 @@ export function SiteFooter() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="text-sm text-lagari-muted transition-colors duration-[var(--lagari-duration-fast)] hover:text-lagari-brass"
+                  className="text-sm text-lagari-muted transition-[color,transform] duration-[var(--lagari-duration-fast)] hover:translate-x-0.5 hover:text-lagari-brass"
                 >
                   {link.label}
                 </Link>

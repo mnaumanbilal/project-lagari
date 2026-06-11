@@ -308,10 +308,28 @@ paths:
       tags: [admin]
       security:
         - bearerAuth: []
-      summary: Analytics overview for date range
+      summary: Analytics overview for date range (PKT)
       parameters:
+        - name: preset
+          in: query
+          schema:
+            type: string
+            enum: [this_week, last_7_days, this_month, this_year, last_30_days]
+        - name: from
+          in: query
+          description: Custom range start (YYYY-MM-DD, PKT)
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: Custom range end (YYYY-MM-DD, PKT)
+          schema:
+            type: string
+            format: date
         - name: days
           in: query
+          description: Legacy — maps to last_7_days or last_30_days
           schema:
             type: integer
             enum: [7, 30]
@@ -322,6 +340,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AnalyticsOverview"
+        "400":
+          description: Invalid date range
 
   /admin/reviews:
     get:
@@ -367,6 +387,64 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /admin/reviews/bulk-delete:
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Delete multiple reviews
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBulkActionResult"
+
+  /admin/reviews/bulk-patch:
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Publish or unpublish multiple reviews
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, isPublished]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+                isPublished:
+                  type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBulkActionResult"
 
   /admin/reviews/import-shopify:
     post:
@@ -512,6 +590,34 @@ paths:
         "204":
           description: Deleted
 
+  /admin/products/bulk-delete:
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Soft delete multiple products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBulkActionResult"
+
   /admin/orders:
     get:
       tags: [admin]
@@ -539,6 +645,13 @@ paths:
             type: integer
             minimum: 1
             maximum: 100
+        - name: archived
+          in: query
+          schema:
+            type: string
+            enum: [true, false, all]
+            default: false
+          description: Filter by archive state (default excludes archived orders)
       responses:
         "200":
           content:
@@ -631,6 +744,10 @@ paths:
                   enum: [pending, confirmed, shipped, delivered, rto, cancelled]
                 note:
                   type: string
+                  description: Internal timeline note (staff only)
+                cancelReason:
+                  type: string
+                  description: Optional message included in customer cancellation email
                 courierName:
                   type: string
                   description: Required when status is shipped
@@ -643,6 +760,167 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrderDetail"
+
+  /admin/orders/{id}/archive:
+    patch:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Archive or restore an order (admin housekeeping)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [archived]
+              properties:
+                archived:
+                  type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderDetail"
+
+  /admin/orders/bulk-archive:
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Archive or restore multiple orders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, archived]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: string
+                    format: uuid
+                archived:
+                  type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminBulkActionResult"
+
+  /admin/notifications:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Admin notification inbox (paginated history)
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer }
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: unreadOnly
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminNotification"
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+
+  /admin/notifications/unread-count:
+    get:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Unread notification count
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+
+  /admin/notifications/read:
+    patch:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Mark notifications read
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                all: { type: boolean }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+                  unreadCount: { type: integer }
+
+  /admin/notifications/stream-token:
+    post:
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      summary: Short-lived SSE token for EventSource
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  expiresInSeconds: { type: integer }
+
+  /admin/notifications/stream:
+    get:
+      tags: [admin]
+      summary: SSE live notification stream (token query param)
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: text/event-stream
 
   /admin/metrics/summary:
     get:
@@ -897,6 +1175,26 @@ components:
         createdAt:
           type: string
           format: date-time
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    AdminBulkActionResult:
+      type: object
+      properties:
+        succeeded:
+          type: integer
+        failed:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              error:
+                type: string
 
     OrderDetail:
       allOf:
@@ -916,6 +1214,9 @@ components:
               type: string
               nullable: true
             adminNotes:
+              type: string
+              nullable: true
+            cancelReason:
               type: string
               nullable: true
             allowedNextStatuses:
@@ -977,8 +1278,18 @@ components:
     AnalyticsOverview:
       type: object
       properties:
-        rangeDays:
-          type: integer
+        preset:
+          type: string
+          nullable: true
+          enum: [this_week, last_7_days, this_month, this_year, last_30_days]
+        label:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
         uniqueVisitors:
           type: integer
         newVisitors:
@@ -995,7 +1306,11 @@ components:
           type: integer
         addToCartSessions:
           type: integer
+        viewThenCartSessions:
+          type: integer
         checkoutStarts:
+          type: integer
+        cartThenCheckoutSessions:
           type: integer
         checkoutConversions:
           type: integer
@@ -1013,6 +1328,10 @@ components:
           type: number
         overallConversionRate:
           type: number
+        dataQualityWarnings:
+          type: array
+          items:
+            type: string
         topProducts:
           type: array
           items:
@@ -1092,3 +1411,35 @@ components:
               type: string
             isPublished:
               type: boolean
+
+    AdminNotification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - order.placed
+            - order.status_changed
+            - inventory.low_stock
+            - product.updated
+            - review.submitted
+        title:
+          type: string
+        body:
+          type: string
+        linkPath:
+          type: string
+          nullable: true
+        payload:
+          type: object
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true

@@ -78,11 +78,48 @@ export const env = {
     apiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
     folder: process.env.CLOUDINARY_FOLDER ?? "lagari/products",
   },
+  email: {
+    host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    user: process.env.SMTP_USER ?? "",
+    appPassword: process.env.SMTP_APP_PASSWORD ?? "",
+    from: process.env.EMAIL_FROM ?? "Lagari <noreply@lagari.pk>",
+    adminTo: process.env.ADMIN_EMAIL ?? "",
+  },
+  slackWebhookUrl: process.env.SLACK_WEBHOOK_URL ?? "",
+  /** Primary site domain for admin links (e.g. https://www.lagari.pk) */
+  domain: (
+    process.env.DOMAIN ??
+    process.env.PUBLIC_SITE_URL ??
+    "https://www.lagari.pk"
+  ).replace(/\/$/, ""),
+  storefrontUrl: process.env.STOREFRONT_URL ?? process.env.CORS_ORIGIN ?? "http://localhost:3000",
+  publicSiteUrl: process.env.PUBLIC_SITE_URL ?? "https://www.lagari.pk",
+  webPush: {
+    publicKey: process.env.VAPID_PUBLIC_KEY ?? "",
+    privateKey: process.env.VAPID_PRIVATE_KEY ?? "",
+    subject: process.env.VAPID_SUBJECT ?? "mailto:lagariassistant@gmail.com",
+  },
 };
 
 export function isCloudinaryConfigured(): boolean {
   const c = env.cloudinary;
   return Boolean(c.cloudName && c.apiKey && c.apiSecret);
+}
+
+export function isEmailConfigured(): boolean {
+  const e = env.email;
+  return Boolean(e.user && e.appPassword && e.adminTo);
+}
+
+export function isSmtpConfigured(): boolean {
+  const e = env.email;
+  return Boolean(e.user && e.appPassword);
+}
+
+export function isWebPushConfigured(): boolean {
+  const w = env.webPush;
+  return Boolean(w.publicKey && w.privateKey);
 }
 
 export const PORT = env.port;

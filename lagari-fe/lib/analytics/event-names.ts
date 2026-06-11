@@ -8,6 +8,9 @@ export const ANALYTICS_EVENTS = {
   ORDER_PLACED: "order_placed",
   SEARCH: "search",
   CATEGORY_VIEW: "category_view",
+  CART_DRAWER_OPEN: "cart_drawer_open",
+  VARIANT_SELECT: "variant_select",
+  NOTE_FILTER_APPLY: "note_filter_apply",
 } as const;
 
 export type AnalyticsEventName =
