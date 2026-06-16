@@ -14,6 +14,7 @@ import { CheckoutSuggestions } from "@/components/storefront/CheckoutSuggestions
 import { CartPanel } from "@/components/storefront/CartPanel";
 import { useCart } from "@/lib/cart/cart-context";
 import { useSession } from "@/lib/session/session-context";
+import { useStorefrontToast } from "@/lib/storefront/toast-context";
 
 const PK_CITIES = [
   "Karachi",
@@ -31,6 +32,7 @@ const PK_CITIES = [
 export function CheckoutForm() {
   const { lines, clearCart, ready } = useCart();
   const { ensureSession, refreshSession } = useSession();
+  const toast = useStorefrontToast();
   const [submitted, setSubmitted] = useState(false);
   const [orderNumber, setOrderNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -120,11 +122,15 @@ export function CheckoutForm() {
             clearCart();
             setSubmitted(true);
           } catch (err) {
-            setError(
+            const message =
               err instanceof ApiError
                 ? err.message
-                : "Could not place order. Please try again.",
-            );
+                : "Could not place order. Please try again.";
+            setError(message);
+            // Also toast for visibility on long pages where the error banner may be scrolled above viewport
+            if (!(err instanceof ApiError) || err.status >= 500) {
+              toast.error(message);
+            }
           } finally {
             setSubmitting(false);
           }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   archiveAdminOrder,
   bulkArchiveAdminOrders,
@@ -18,7 +18,19 @@ import {
   type AdminOrderStatusPatch,
 } from "@/lib/api/admin";
 import { adminKeys } from "@/lib/admin/admin-query-keys";
+import {
+  deltaForBulkPublish,
+  deltaForDelete,
+  deltaForPublishToggle,
+  findAdminReviewInCache,
+  patchReviewCountsInCache,
+  refetchReviewStats,
+} from "@/lib/admin/review-cache-updates";
 import { useAdminToken } from "@/lib/admin/hooks/use-admin-token";
+
+function invalidateAfterReviewChange(queryClient: QueryClient) {
+  void refetchReviewStats(queryClient);
+}
 
 export function useInvalidateAdminOrders() {
   const queryClient = useQueryClient();
@@ -142,10 +154,15 @@ export function usePatchAdminReview() {
   return useMutation({
     mutationFn: ({ id, isPublished }: { id: string; isPublished: boolean }) =>
       patchAdminReview(token!, id, isPublished),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: [...adminKeys.all, "reviews"],
-      });
+    onMutate: ({ id, isPublished }) => {
+      const review = findAdminReviewInCache(queryClient, id);
+      const delta = review
+        ? deltaForPublishToggle(review.isPublished, isPublished)
+        : deltaForPublishToggle(!isPublished, isPublished);
+      patchReviewCountsInCache(queryClient, delta);
+    },
+    onSettled: () => {
+      invalidateAfterReviewChange(queryClient);
     },
   });
 }
@@ -156,10 +173,12 @@ export function useDeleteAdminReview() {
 
   return useMutation({
     mutationFn: (id: string) => deleteAdminReview(token!, id),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: [...adminKeys.all, "reviews"],
-      });
+    onMutate: (id) => {
+      const review = findAdminReviewInCache(queryClient, id);
+      if (review) patchReviewCountsInCache(queryClient, deltaForDelete(review));
+    },
+    onSettled: () => {
+      invalidateAfterReviewChange(queryClient);
     },
   });
 }
@@ -170,10 +189,20 @@ export function useBulkDeleteAdminReviews() {
 
   return useMutation({
     mutationFn: (ids: string[]) => bulkDeleteAdminReviews(token!, ids),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: [...adminKeys.all, "reviews"],
-      });
+    onMutate: (ids) => {
+      let pending = 0;
+      let published = 0;
+      for (const id of ids) {
+        const review = findAdminReviewInCache(queryClient, id);
+        if (!review) continue;
+        const d = deltaForDelete(review);
+        pending += d.pending;
+        published += d.published;
+      }
+      patchReviewCountsInCache(queryClient, { pending, published });
+    },
+    onSettled: () => {
+      invalidateAfterReviewChange(queryClient);
     },
   });
 }
@@ -190,10 +219,25 @@ export function useBulkPatchAdminReviews() {
       ids: string[];
       isPublished: boolean;
     }) => bulkPatchAdminReviews(token!, ids, isPublished),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: [...adminKeys.all, "reviews"],
-      });
+    onMutate: ({ ids, isPublished }) => {
+      let pending = 0;
+      let published = 0;
+      for (const id of ids) {
+        const review = findAdminReviewInCache(queryClient, id);
+        if (review) {
+          const d = deltaForPublishToggle(review.isPublished, isPublished);
+          pending += d.pending;
+          published += d.published;
+        } else {
+          const d = deltaForBulkPublish(1, isPublished);
+          pending += d.pending;
+          published += d.published;
+        }
+      }
+      patchReviewCountsInCache(queryClient, { pending, published });
+    },
+    onSettled: () => {
+      invalidateAfterReviewChange(queryClient);
     },
   });
 }
@@ -210,10 +254,8 @@ export function useImportShopifyReviews() {
       reviews: Array<Record<string, unknown>>;
       publishByDefault?: boolean;
     }) => importShopifyReviews(token!, reviews, publishByDefault),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: [...adminKeys.all, "reviews"],
-      });
+    onSettled: () => {
+      invalidateAfterReviewChange(queryClient);
     },
   });
 }

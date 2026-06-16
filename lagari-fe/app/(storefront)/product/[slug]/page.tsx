@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductGallery } from "@/components/storefront/ProductGallery";
 import { ProductPurchase } from "@/components/storefront/ProductPurchase";
+import { ProductRatingSummary } from "@/components/storefront/ProductRatingSummary";
 import { buildGalleryImages } from "@/lib/product-gallery";
 import { ProductReviews } from "@/components/storefront/ProductReviews";
 import { ProductViewTracker } from "@/components/storefront/ProductViewTracker";
@@ -75,6 +76,12 @@ export default async function ProductPage({ params }: ProductPageProps) {
           <h1 className="font-display mt-2 text-4xl font-semibold text-lagari-primary sm:text-5xl">
             {product.title}
           </h1>
+          <ProductRatingSummary
+            summary={product.reviewSummary}
+            size="md"
+            href="#reviews"
+            className="mt-3"
+          />
           {product.description && (
             <div
               className="prose-lagari mt-6 space-y-4 leading-relaxed text-lagari-muted [&_h3]:font-display [&_h3]:text-lg [&_h3]:text-lagari-primary [&_p]:mt-0 [&_strong]:text-lagari-primary"

@@ -2,20 +2,20 @@
 
 ## Current focus
 
-**Admin console** — dark theme, form validation, toasts, product CRUD with field-level errors.
+**Performance** — faster navigation (shop client filters, admin query batching, DB indexes, session/cart parallelization).
 
 ## Recent changes
 
-- Admin **dark theme** (`admin-theme` CSS): warm dark surfaces, `#232018` inputs.
-- **Toast system** — `AdminToastProvider` / `useAdminToast` (success, error, warning, info).
-- **Form errors** — `ApiError.payload`, BE `issues[]` paths, `parseApiError`, scroll to `data-admin-field`.
-- **Product form** — client validation, per-variant errors, slug uniqueness (409 → slug field), strips empty variant rows.
-- Docs: `docs/architecture/admin-ux.md`.
+- **Shop perf:** Filter/search updates URL via `history.replaceState` (no RSC round-trip); products fetched client-side via React Query; search debounce 400ms; shop page caches taxonomy 5min.
+- **Admin perf:** `listAdminProducts` single query + batched review summaries (was N+1); metrics/analytics queries parallelized; admin `loading.tsx` skeletons; optimistic admin shell during token refresh; React Query staleTime 2min, no refetch-on-focus.
+- **Storefront perf:** Home hero streams before products (`Suspense`); session touch throttled 60s; cart loads in parallel with session validation.
+- **BE infra:** Sequelize pool (max 20); catalog `Cache-Control`; performance indexes migration.
 
 ## Next steps
 
-1. Extend field-error pattern to other admin forms if added.
-2. Optional: shared `useAdminMutation` hook for list actions.
+1. Run migration `20260617120000-performance-indexes.js` on all envs.
+2. Optional: Redis cache for catalog list; dynamic import TipTap / framer-motion.
+3. Optional: JSON-LD `aggregateRating` on PDP metadata.
 
 ## Default seed admin
 

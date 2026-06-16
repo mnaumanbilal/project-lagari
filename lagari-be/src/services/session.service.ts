@@ -34,6 +34,8 @@ export async function createSession(input: {
   });
 }
 
+const SESSION_TOUCH_MIN_INTERVAL_MS = 60_000;
+
 export async function touchSession(sessionId: string): Promise<boolean> {
   const session = await AnalyticsSession.findByPk(sessionId);
   if (!session || session.endedAt) return false;
@@ -43,6 +45,11 @@ export async function touchSession(sessionId: string): Promise<boolean> {
   if (now.getTime() - session.lastActivityAt.getTime() > idleMs) {
     await session.update({ endedAt: now });
     return false;
+  }
+
+  const sinceLastTouch = now.getTime() - session.lastActivityAt.getTime();
+  if (sinceLastTouch < SESSION_TOUCH_MIN_INTERVAL_MS) {
+    return true;
   }
 
   await session.update({ lastActivityAt: now });

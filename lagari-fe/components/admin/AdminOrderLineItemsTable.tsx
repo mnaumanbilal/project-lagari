@@ -1,5 +1,6 @@
 import type { AdminOrderItem } from "@/lib/api/admin";
 import { formatPkr } from "@/lib/format";
+import { StorefrontProductLink } from "@/components/storefront/StorefrontProductLink";
 
 type Props = {
   items: AdminOrderItem[];
@@ -27,7 +28,11 @@ export function AdminOrderLineItemsTable({
             className="rounded-sm border border-lagari-border/80 bg-lagari-elevated/30 p-3 text-sm"
           >
             <p className="font-medium text-lagari-primary">
-              {item.productTitleSnapshot}
+              <StorefrontProductLink
+                slug={item.productSlugSnapshot}
+                title={item.productTitleSnapshot}
+                className="font-medium text-lagari-primary hover:text-lagari-brass hover:underline"
+              />
             </p>
             <p className="mt-0.5 text-xs text-lagari-muted">
               {item.variantNameSnapshot}
@@ -83,7 +88,11 @@ export function AdminOrderLineItemsTable({
             {items.map((item) => (
               <tr key={item.id} className="text-lagari-primary">
                 <td className={`${cellPad} font-medium`}>
-                  {item.productTitleSnapshot}
+                  <StorefrontProductLink
+                    slug={item.productSlugSnapshot}
+                    title={item.productTitleSnapshot}
+                    className="font-medium text-lagari-primary hover:text-lagari-brass hover:underline"
+                  />
                 </td>
                 <td className={`${cellPad} text-lagari-muted`}>
                   {item.variantNameSnapshot}

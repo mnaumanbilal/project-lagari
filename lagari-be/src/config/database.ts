@@ -1,7 +1,8 @@
 import { Sequelize } from "sequelize";
 import { env } from "./env";
 
-const { host, port, user, password, name, logging, ssl } = env.db;
+const { host, port, user, password, name, logging } = env.db;
+const ssl = "ssl" in env.db ? env.db.ssl : false;
 
 /** Sequelize instance — env-driven (see config/env.ts + .env). */
 export const sequelize = new Sequelize({
@@ -15,6 +16,12 @@ export const sequelize = new Sequelize({
   dialectOptions: ssl
     ? { ssl: { require: true, rejectUnauthorized: false } }
     : undefined,
+  pool: {
+    max: Number(process.env.DB_POOL_MAX ?? 20),
+    min: 2,
+    acquire: 30_000,
+    idle: 10_000,
+  },
   define: {
     underscored: true,
     timestamps: true,

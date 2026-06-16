@@ -9,7 +9,10 @@ import {
   fetchAdminProduct,
   fetchAdminProducts,
   fetchAdminReviews,
+  fetchReviewAnalytics,
+  fetchReviewLinkedOrder,
   type AnalyticsRangeParams,
+  type FetchAdminReviewsParams,
   type FetchAdminOrdersParams,
 } from "@/lib/api/admin";
 import { adminKeys } from "@/lib/admin/admin-query-keys";
@@ -60,12 +63,40 @@ export function useAdminProduct(id: string | undefined) {
   });
 }
 
-export function useAdminReviews(tab: "pending" | "published") {
+export function useAdminReviews(params: FetchAdminReviewsParams) {
   const token = useAdminToken();
   return useQuery({
-    queryKey: adminKeys.reviews(tab),
-    queryFn: () => fetchAdminReviews(token!, tab),
+    queryKey: adminKeys.reviews(params),
+    queryFn: () => fetchAdminReviews(token!, params),
     enabled: !!token,
+  });
+}
+
+export function useReviewAnalytics(range: AnalyticsRangeParams) {
+  const token = useAdminToken();
+  return useQuery({
+    queryKey: adminKeys.reviewAnalytics(range),
+    queryFn: () => fetchReviewAnalytics(token!, range),
+    enabled: !!token,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Lazily fetch the order backing a verified purchase review.
+ * Only fires when `enabled` is true — typically when the admin expands the panel.
+ */
+export function useReviewLinkedOrder(
+  reviewId: string,
+  enabled: boolean,
+) {
+  const token = useAdminToken();
+  return useQuery({
+    queryKey: adminKeys.reviewLinkedOrder(reviewId),
+    queryFn: () => fetchReviewLinkedOrder(token!, reviewId),
+    enabled: !!token && !!reviewId && enabled,
+    staleTime: 60_000,
+    retry: false,
   });
 }
 

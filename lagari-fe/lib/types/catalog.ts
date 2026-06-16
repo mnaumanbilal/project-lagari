@@ -9,6 +9,12 @@ export type ProductVariant = {
   inStock?: boolean;
 };
 
+export type ReviewSummary = {
+  averageRating: number;
+  totalCount: number;
+  distribution?: Record<string, number>;
+};
+
 export type CatalogProduct = {
   id?: string;
   slug: string;
@@ -24,6 +30,7 @@ export type CatalogProduct = {
   topNotes?: string;
   heartNotes?: string;
   baseNotes?: string;
+  reviewSummary?: ReviewSummary | null;
   variants?: ProductVariant[];
   images?: { url: string; isHero: boolean }[];
   featured?: boolean;

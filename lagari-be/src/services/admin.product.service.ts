@@ -10,6 +10,11 @@ import { AppError } from "../middleware/errorHandler";
 import { sanitizeProductHtml } from "../utils/sanitizeHtml";
 import { checkVariantLowStock } from "./inventory-alert.service";
 import { notifyProductUpdated } from "./notification.service";
+import {
+  getProductReviewSummary,
+  getReviewSummariesForProducts,
+  type ReviewSummary,
+} from "./review.service";
 
 export type VariantInput = {
   id?: string;
@@ -62,7 +67,7 @@ async function resolveNoteTagIds(slugs: string[]) {
   return rows.map((t) => t.id);
 }
 
-function mapAdminProduct(product: Product) {
+function mapAdminProduct(product: Product, reviewSummary: ReviewSummary | null = null) {
   const variants =
     (product as Product & { variants?: ProductVariant[] }).variants ?? [];
   const images =
@@ -106,6 +111,7 @@ function mapAdminProduct(product: Product) {
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((i) => ({ url: i.url, isHero: i.isHero, sortOrder: i.sortOrder })),
     createdAt: product.createdAt,
+    reviewSummary,
   };
 }
 
@@ -120,7 +126,26 @@ export async function getAdminProduct(id: string) {
     ],
   });
   if (!product) throw new AppError(404, "Product not found");
-  return mapAdminProduct(product);
+  const reviewSummary = await getProductReviewSummary(product.id);
+  return mapAdminProduct(product, reviewSummary);
+}
+
+export async function listAdminProducts() {
+  const products = await Product.findAll({
+    where: { deletedAt: null },
+    include: [
+      { model: ProductVariant, as: "variants" },
+      { model: ProductImage, as: "images" },
+      { association: "categories" },
+      { association: "noteTags" },
+    ],
+    order: [["createdAt", "DESC"]],
+  });
+
+  const summaryMap = await getReviewSummariesForProducts(products.map((p) => p.id));
+  return products.map((product) =>
+    mapAdminProduct(product, summaryMap.get(product.id) ?? null),
+  );
 }
 
 export async function createProduct(input: ProductInput) {

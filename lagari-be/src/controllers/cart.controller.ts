@@ -44,6 +44,7 @@ export async function upsertCartItem(req: Request, res: Response) {
         {
           variantId: variant.id,
           productTitle: product.title,
+          productSlug: product.slug,
           variantName: variant.name,
           quantity: body.quantity,
           unitPricePkr: variant.pricePkr,

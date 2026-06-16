@@ -26,6 +26,7 @@ import {
   unlockNotificationSound,
 } from "@/lib/admin/notification-sound";
 import { useAdminAuth } from "@/lib/admin/admin-auth-context";
+import { getValidAccessToken } from "@/lib/admin/token-storage";
 
 type AdminNotificationContextValue = {
   unreadCount: number;
@@ -46,6 +47,7 @@ const AdminNotificationContext =
 const INBOX_PAGE_SIZE = 20;
 const STREAM_TOKEN_REFRESH_MS = 4 * 60 * 1000;
 const RECONNECT_DELAY_MS = 5000;
+const MAX_STREAM_RECONNECTS = 5;
 
 export function AdminNotificationProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, ready } = useAdminAuth();
@@ -62,6 +64,7 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
   const tokenRefreshTimerRef = useRef<number | null>(null);
   const intentionalCloseRef = useRef(false);
   const reconnectPendingRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
   /** IDs we've already shown toast/sound for this browser session */
   const alertedIdsRef = useRef(new Set<string>());
   const toastInfoRef = useRef(toastInfo);
@@ -158,7 +161,7 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
   const connectStreamRef = useRef<() => Promise<void>>(async () => {});
 
   connectStreamRef.current = async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !getValidAccessToken()) return;
 
     closeStream();
 
@@ -172,6 +175,7 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
       es.addEventListener("connected", () => {
         unlockNotificationSound();
         reconnectPendingRef.current = false;
+        reconnectAttemptsRef.current = 0;
       });
 
       es.addEventListener("notification", (event) => {
@@ -197,18 +201,24 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
         }
         closeStream();
         if (reconnectPendingRef.current) return;
+        if (reconnectAttemptsRef.current >= MAX_STREAM_RECONNECTS) return;
         reconnectPendingRef.current = true;
+        reconnectAttemptsRef.current += 1;
         reconnectTimerRef.current = window.setTimeout(() => {
           reconnectPendingRef.current = false;
+          if (!getValidAccessToken()) return;
           void connectStreamRef.current();
           void refreshUnreadCount();
         }, RECONNECT_DELAY_MS);
       };
     } catch {
       if (reconnectPendingRef.current) return;
+      if (reconnectAttemptsRef.current >= MAX_STREAM_RECONNECTS) return;
       reconnectPendingRef.current = true;
+      reconnectAttemptsRef.current += 1;
       reconnectTimerRef.current = window.setTimeout(() => {
         reconnectPendingRef.current = false;
+        if (!getValidAccessToken()) return;
         void connectStreamRef.current();
       }, RECONNECT_DELAY_MS);
     }

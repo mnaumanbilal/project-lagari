@@ -105,3 +105,22 @@ Breakpoint **`lg` (1024px)** — tables at `lg+`, card lists below.
 **Lists:** Orders, Products, Dashboard recent orders, Analytics top products use dual layout (`hidden lg:block` table + `lg:hidden` cards).
 
 **Notifications:** fixed panel under header on small screens with backdrop tap-to-close.
+
+## Admin list filters & search
+
+Use this pattern for **search-as-you-type** on admin queues (reviews, orders, products):
+
+| Rule | Detail |
+|------|--------|
+| **Debounce** | Local draft input → commit to URL after `ADMIN_FILTER_DEBOUNCE_MS` (350ms) via `useDebouncedValue` |
+| **URL is source of truth** | Committed filters live in query params; shareable/bookmarkable |
+| **Instant filters** | Selects, tabs, buttons update URL immediately (no debounce) |
+| **Patch, don’t stale-merge** | Debounced commits use `patchState(partial)` merged from current `searchParams`, not closed-over React state |
+| **Backend search** | `normalizeSearchTerm` + `ilikeContainsPattern` on slug **and** title (`Op.or`); escape `%` `_` `\` |
+| **API param** | `productSearch` (legacy `productSlug` still accepted); URL param `product` |
+
+**Reviews:** `GET /admin/reviews?product=velocity` matches slug or title containing “velocity”.
+
+**Reuse:** `lagari-fe/lib/admin/debounce.ts`, `lagari-fe/lib/hooks/use-debounced-value.ts`, `lagari-be/src/utils/search-text.ts`.
+
+Storefront shop search uses a longer debounce (`SEARCH_DEBOUNCE_MS` in catalog) — do not reuse that delay for admin filters.

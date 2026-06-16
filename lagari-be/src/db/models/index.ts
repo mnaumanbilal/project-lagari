@@ -380,17 +380,19 @@ export interface OrderItemAttributes {
   orderId: string;
   variantId: string;
   productTitleSnapshot: string;
+  productSlugSnapshot: string | null;
   variantNameSnapshot: string;
   unitPricePkr: number;
   quantity: number;
 }
-type OrderItemCreation = Optional<OrderItemAttributes, "id">;
+type OrderItemCreation = Optional<OrderItemAttributes, "id" | "productSlugSnapshot">;
 
 export class OrderItem extends Model<OrderItemAttributes, OrderItemCreation> implements OrderItemAttributes {
   declare id: string;
   declare orderId: string;
   declare variantId: string;
   declare productTitleSnapshot: string;
+  declare productSlugSnapshot: string | null;
   declare variantNameSnapshot: string;
   declare unitPricePkr: number;
   declare quantity: number;
@@ -401,6 +403,7 @@ OrderItem.init(
     orderId: { type: DataTypes.UUID, allowNull: false, field: "order_id" },
     variantId: { type: DataTypes.UUID, allowNull: false, field: "variant_id" },
     productTitleSnapshot: { type: DataTypes.STRING, allowNull: false, field: "product_title_snapshot" },
+    productSlugSnapshot: { type: DataTypes.STRING, allowNull: true, field: "product_slug_snapshot" },
     variantNameSnapshot: { type: DataTypes.STRING, allowNull: false, field: "variant_name_snapshot" },
     unitPricePkr: { type: DataTypes.INTEGER, allowNull: false, field: "unit_price_pkr" },
     quantity: { type: DataTypes.INTEGER, allowNull: false },
@@ -496,6 +499,8 @@ export type ReviewSource = "customer" | "shopify";
 export interface ProductReviewAttributes {
   id: string;
   productId: string;
+  /** FK to customers — null for Shopify-imported reviews */
+  customerId: string | null;
   authorName: string;
   rating: number;
   body: string;
@@ -504,10 +509,22 @@ export interface ProductReviewAttributes {
   isVerifiedPurchase: boolean;
   sessionId: string | null;
   shopifyLegacyId: string | null;
+  /** Normalised phone used at submission time (audit snapshot) */
+  contactPhoneNormalized: string | null;
+  /** Normalised email used at submission time (audit snapshot) */
+  contactEmailNormalized: string | null;
 }
 type ReviewCreation = Optional<
   ProductReviewAttributes,
-  "id" | "source" | "isPublished" | "isVerifiedPurchase" | "sessionId" | "shopifyLegacyId"
+  | "id"
+  | "source"
+  | "isPublished"
+  | "isVerifiedPurchase"
+  | "sessionId"
+  | "shopifyLegacyId"
+  | "customerId"
+  | "contactPhoneNormalized"
+  | "contactEmailNormalized"
 >;
 
 export class ProductReview
@@ -518,6 +535,7 @@ export class ProductReview
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
   declare productId: string;
+  declare customerId: string | null;
   declare authorName: string;
   declare rating: number;
   declare body: string;
@@ -526,11 +544,14 @@ export class ProductReview
   declare isVerifiedPurchase: boolean;
   declare sessionId: string | null;
   declare shopifyLegacyId: string | null;
+  declare contactPhoneNormalized: string | null;
+  declare contactEmailNormalized: string | null;
 }
 ProductReview.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     productId: { type: DataTypes.UUID, allowNull: false, field: "product_id" },
+    customerId: { type: DataTypes.UUID, allowNull: true, field: "customer_id" },
     authorName: { type: DataTypes.STRING, allowNull: false, field: "author_name" },
     rating: { type: DataTypes.INTEGER, allowNull: false },
     body: { type: DataTypes.TEXT, allowNull: false },
@@ -561,6 +582,16 @@ ProductReview.init(
       allowNull: true,
       unique: true,
       field: "shopify_legacy_id",
+    },
+    contactPhoneNormalized: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      field: "contact_phone_normalized",
+    },
+    contactEmailNormalized: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: "contact_email_normalized",
     },
   },
   { sequelize, tableName: "product_reviews", underscored: true },
@@ -714,6 +745,9 @@ ProductImage.belongsTo(Product, { foreignKey: "product_id", as: "product" });
 
 Product.hasMany(ProductReview, { foreignKey: "product_id", as: "reviews" });
 ProductReview.belongsTo(Product, { foreignKey: "product_id", as: "product" });
+
+Customer.hasMany(ProductReview, { foreignKey: "customer_id", as: "reviews" });
+ProductReview.belongsTo(Customer, { foreignKey: "customer_id", as: "customer" });
 
 Customer.hasMany(Order, { foreignKey: "customer_id", as: "orders" });
 Order.belongsTo(Customer, { foreignKey: "customer_id", as: "customer" });

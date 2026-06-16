@@ -3,6 +3,7 @@ import type { OrderStatus } from "../db/models";
 export type OrderEmailLine = {
   title: string;
   variant: string;
+  productSlug: string | null;
   quantity: number;
   lineTotalPkr: number;
 };
@@ -111,13 +112,26 @@ function numStyle(extra = ""): string {
   return `font-family:${FONT};font-variant-numeric:tabular-nums;font-weight:600;color:${C.amount};${extra}`;
 }
 
-function itemsTableHtml(items: OrderEmailLine[], orderTotalPkr: number): string {
+function itemTitleHtml(title: string, productSlug: string | null, siteUrl: string): string {
+  const slug = productSlug?.trim();
+  if (!slug) {
+    return title;
+  }
+  const href = `${siteUrl.replace(/\/$/, "")}/product/${slug}`;
+  return `<a href="${href}" style="color:${C.text};text-decoration:none;font-weight:500;">${title}</a>`;
+}
+
+function itemsTableHtml(
+  items: OrderEmailLine[],
+  orderTotalPkr: number,
+  siteUrl: string,
+): string {
   const rows = items
     .map(
       (item) =>
         `<tr>
           <td style="padding:10px 0;border-bottom:1px solid ${C.border};font-family:${FONT};color:${C.text};font-size:14px;font-weight:500;">
-            ${item.title}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
+            ${itemTitleHtml(item.title, item.productSlug, siteUrl)}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
           </td>
           <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:center;${numStyle("font-size:14px;")}">×${item.quantity}</td>
           <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:right;${numStyle("font-size:14px;")}">${formatPkr(item.lineTotalPkr)}</td>
@@ -172,7 +186,12 @@ export function buildCustomerOrderEmail(ctx: OrderEmailContext): {
       : "";
 
   const itemsText = ctx.items
-    .map((i) => `• ${i.title} (${i.variant}) ×${i.quantity} — ${formatPkr(i.lineTotalPkr)}`)
+    .map((i) => {
+      const base = `• ${i.title} (${i.variant}) ×${i.quantity} — ${formatPkr(i.lineTotalPkr)}`;
+      const slug = i.productSlug?.trim();
+      if (!slug) return base;
+      return `${base}\n  ${ctx.siteUrl.replace(/\/$/, "")}/product/${slug}`;
+    })
     .join("\n");
 
   const text = `Hi ${ctx.customerName},
@@ -224,7 +243,7 @@ ${ctx.siteUrl}`;
               <p class="email-muted" style="margin:6px 0 0;font-size:14px;line-height:1.5;color:${C.textMuted};font-family:${FONT};">${ctx.shippingAddress}, ${ctx.shippingCity}</p>
               ${trackingHtml}
               ${cancelReasonHtml}
-              ${itemsTableHtml(ctx.items, ctx.totalPkr)}
+              ${itemsTableHtml(ctx.items, ctx.totalPkr, ctx.siteUrl)}
               ${contactFooterHtml(ctx)}
               <p style="margin:24px 0 0;font-size:13px;font-family:${FONT};">
                 <a href="${ctx.siteUrl}" style="color:${C.label};font-weight:600;text-decoration:none;">lagari.pk</a>

@@ -13,11 +13,13 @@ import {
   deleteAdminProduct,
   deleteAdminReview,
   getAdminOrder,
+  getReviewLinkedOrder,
   patchAdminOrder,
   patchAdminOrderArchive,
   getAdminProduct,
   getAnalyticsOverview,
   getMetricsSummary,
+  getReviewAnalytics,
   importShopifyReviews,
   listAdminOrders,
   listAdminProducts,
@@ -53,6 +55,9 @@ router.patch("/admin/orders/:id/archive", catchAsync(patchAdminOrderArchive));
 router.post("/admin/orders/bulk-archive", catchAsync(bulkArchiveAdminOrders));
 router.patch("/admin/orders/:id/status", catchAsync(patchOrderStatus));
 router.get("/admin/reviews", catchAsync(listAdminReviews));
+router.get("/admin/reviews/analytics", catchAsync(getReviewAnalytics));
+// :id routes must come after static sub-paths
+router.get("/admin/reviews/:id/linked-order", catchAsync(getReviewLinkedOrder));
 router.patch("/admin/reviews/:id", catchAsync(patchAdminReview));
 router.delete("/admin/reviews/:id", catchAsync(deleteAdminReview));
 router.post("/admin/reviews/bulk-delete", catchAsync(bulkDeleteAdminReviews));

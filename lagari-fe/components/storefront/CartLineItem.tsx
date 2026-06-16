@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { QuantityStepper } from "@/components/storefront/QuantityStepper";
 import { formatPkr } from "@/lib/format";
+import { productPath } from "@/lib/storefront/product-url";
 import type { CartLine } from "@/lib/cart/cart-context";
 import { useCart } from "@/lib/cart/cart-context";
+import { useStorefrontToast } from "@/lib/storefront/toast-context";
 
 type Props = {
   line: CartLine;
@@ -15,6 +17,7 @@ type Props = {
 
 export function CartLineItem({ line, compact }: Props) {
   const { setQuantity, removeItem } = useCart();
+  const toast = useStorefrontToast();
   const [busy, setBusy] = useState(false);
 
   async function updateQuantity(next: number) {
@@ -25,15 +28,19 @@ export function CartLineItem({ line, compact }: Props) {
       } else {
         await setQuantity(line.variantId, next);
       }
+    } catch {
+      toast.error("Could not update your bag. Please try again.");
     } finally {
       setBusy(false);
     }
   }
 
+  const productHref = productPath(line.productSlug) ?? "/shop";
+
   return (
     <li className={`flex gap-4 ${compact ? "" : "border-b border-lagari-border pb-4 last:border-0 last:pb-0"}`}>
       <Link
-        href={line.productSlug ? `/product/${line.productSlug}` : "/shop"}
+        href={productHref}
         className="relative h-16 w-14 shrink-0 overflow-hidden rounded-sm bg-lagari-deep"
       >
         <Image
@@ -49,7 +56,7 @@ export function CartLineItem({ line, compact }: Props) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <Link
-              href={line.productSlug ? `/product/${line.productSlug}` : "/shop"}
+              href={productHref}
               className="font-medium text-lagari-primary hover:text-lagari-brass"
             >
               {line.productTitle}

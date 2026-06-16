@@ -89,6 +89,7 @@ export function AdminProductsList() {
                   </th>
                   <th className="px-4 py-3">Title</th>
                   <th className="px-4 py-3">Slug</th>
+                  <th className="px-4 py-3">Rating</th>
                   <th className="px-4 py-3">Published</th>
                   <th className="px-4 py-3">From</th>
                   <th className="px-4 py-3 text-right">Actions</th>

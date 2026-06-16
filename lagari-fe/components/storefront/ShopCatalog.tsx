@@ -1,45 +1,35 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo } from "react";
 import { trackCategoryView, trackSearch } from "@/lib/analytics/event-buffer";
 import { ProductCard } from "@/components/storefront/ProductCard";
 import { ProductSearchInput } from "@/components/storefront/ProductSearchInput";
 import { ShopFilters } from "@/components/storefront/ShopFilters";
 import { useProductSearchInput } from "@/lib/context/product-search-context";
+import { useShopFilters } from "@/lib/hooks/use-shop-filters";
 import { useProductSearch } from "@/lib/hooks/use-product-search";
 import type { CatalogProduct, CategoryOption, NoteTagOption } from "@/lib/types/catalog";
 
 type ShopCatalogProps = {
   categories: CategoryOption[];
   noteTags: NoteTagOption[];
-  initialCategory: string;
-  initialNote?: string;
-  initialQuery?: string;
   initialProducts: CatalogProduct[];
 };
 
 export function ShopCatalog({
   categories,
   noteTags,
-  initialCategory,
-  initialNote,
-  initialQuery = "",
   initialProducts,
 }: ShopCatalogProps) {
-  const searchParams = useSearchParams();
+  const { filters, patchFilters } = useShopFilters();
   const { query, setQuery, debouncedQ, isDebouncing } = useProductSearchInput();
 
-  const activeCategory = searchParams.get("category") ?? initialCategory;
-  const activeNote = searchParams.get("note") ?? initialNote ?? undefined;
+  const activeCategory = filters.category;
+  const activeNote = filters.note;
 
   const serverFilters = useMemo(
-    () => ({
-      category: initialCategory,
-      note: initialNote,
-      q: initialQuery || undefined,
-    }),
-    [initialCategory, initialNote, initialQuery],
+    () => ({ category: "all" as const, note: undefined, q: undefined }),
+    [],
   );
 
   const { data: products = initialProducts, isSearching } = useProductSearch(
@@ -119,6 +109,8 @@ export function ShopCatalog({
         activeCategory={activeCategory}
         activeNote={activeNote}
         activeQuery={debouncedQ}
+        onCategoryChange={(slug) => patchFilters({ category: slug })}
+        onNoteChange={(note) => patchFilters({ note })}
       />
 
       {!showSearching && products.length === 0 ? (

@@ -7,7 +7,9 @@ import { AdminRefreshButton } from "@/components/admin/AdminRefreshButton";
 import { AdminTextField, AdminVariantField } from "@/components/admin/AdminField";
 import { AdminTaxonomyCheckboxes } from "@/components/admin/AdminTaxonomyCheckboxes";
 import { AdminProductImages, type ProductImageRow } from "@/components/admin/AdminProductImages";
+import { AdminProductReviewsPanel } from "@/components/admin/AdminProductReviewsPanel";
 import { AdminRichTextEditor } from "@/components/admin/AdminRichTextEditor";
+import { ProductRatingSummary } from "@/components/storefront/ProductRatingSummary";
 import { sanitizeProductHtml } from "@/lib/admin/sanitize-html";
 import { useAdminToast } from "@/lib/admin/admin-toast-context";
 import { ADMIN_PRODUCTS_PATH } from "@/lib/admin/constants";
@@ -53,6 +55,9 @@ export function AdminProductForm({ productId }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [designerInspiration, setDesignerInspiration] = useState("");
+  const [topNotes, setTopNotes] = useState("");
+  const [heartNotes, setHeartNotes] = useState("");
+  const [baseNotes, setBaseNotes] = useState("");
   const [isPublished, setIsPublished] = useState(false);
   const [categorySlugs, setCategorySlugs] = useState<string[]>([]);
   const [noteTagSlugs, setNoteTagSlugs] = useState<string[]>([]);
@@ -73,6 +78,9 @@ export function AdminProductForm({ productId }: Props) {
     setTitle(p.title);
     setDescription(p.description ?? "");
     setDesignerInspiration(p.designerInspiration ?? "");
+    setTopNotes(p.topNotes ?? "");
+    setHeartNotes(p.heartNotes ?? "");
+    setBaseNotes(p.baseNotes ?? "");
     setIsPublished(!!p.isPublished);
     setCategorySlugs(p.categories ?? []);
     setNoteTagSlugs(p.noteTags ?? []);
@@ -122,6 +130,9 @@ export function AdminProductForm({ productId }: Props) {
       title: title.trim(),
       description: description ? sanitizeProductHtml(description) : null,
       designerInspiration: designerInspiration || null,
+      topNotes: topNotes.trim() || null,
+      heartNotes: heartNotes.trim() || null,
+      baseNotes: baseNotes.trim() || null,
       isPublished,
       categorySlugs,
       noteTagSlugs,
@@ -234,6 +245,13 @@ export function AdminProductForm({ productId }: Props) {
       <h1 className="font-display mt-4 text-3xl font-semibold">
         {productId ? "Edit product" : "New product"}
       </h1>
+      {productId && productQuery.data && (
+        <ProductRatingSummary
+          summary={productQuery.data.reviewSummary}
+          size="sm"
+          className="mt-2"
+        />
+      )}
 
       <form onSubmit={handleSubmit} noValidate className="mt-8 max-w-2xl space-y-5">
         {(fieldErrors._form || visibleFieldErrors.length > 0) && (
@@ -285,6 +303,43 @@ export function AdminProductForm({ productId }: Props) {
           value={description}
           onChange={setDescription}
         />
+
+        <div className="admin-card space-y-4 p-4">
+          <div>
+            <h2 className="font-display text-lg font-semibold text-lagari-primary">
+              Perfume notes
+            </h2>
+            <p className="mt-1 text-xs text-lagari-muted">
+              Shown on the product page as Top · Heart · Base (comma-separated
+              ingredients in each row).
+            </p>
+          </div>
+          <AdminTextField
+            label="Top notes"
+            fieldKey="topNotes"
+            errors={fieldErrors}
+            value={topNotes}
+            onChange={setTopNotes}
+            hint="e.g. Pink Pepper, Lime, Gin Tonic Accord"
+          />
+          <AdminTextField
+            label="Heart notes"
+            fieldKey="heartNotes"
+            errors={fieldErrors}
+            value={heartNotes}
+            onChange={setHeartNotes}
+            hint="e.g. Plum, Geranium, Cypress, Nutmeg"
+          />
+          <AdminTextField
+            label="Base notes"
+            fieldKey="baseNotes"
+            errors={fieldErrors}
+            value={baseNotes}
+            onChange={setBaseNotes}
+            hint="e.g. Truffle Accord, Vetiver, Texas Cedarwood, Amber"
+          />
+        </div>
+
         <AdminTaxonomyCheckboxes
           kind="categories"
           label="Categories"
@@ -296,7 +351,7 @@ export function AdminProductForm({ productId }: Props) {
         />
         <AdminTaxonomyCheckboxes
           kind="noteTags"
-          label="Scent notes"
+          label="Note tags"
           fieldKey="noteTagSlugs"
           errors={fieldErrors}
           selected={noteTagSlugs}
@@ -478,6 +533,14 @@ export function AdminProductForm({ productId }: Props) {
           {submitting ? "Saving…" : "Save product"}
         </button>
       </form>
+
+      {productId && productQuery.data && (
+        <AdminProductReviewsPanel
+          productSlug={productQuery.data.slug}
+          productTitle={productQuery.data.title}
+          reviewSummary={productQuery.data.reviewSummary}
+        />
+      )}
 
       {productId ? (
         <section className="admin-card mt-10 max-w-2xl border border-lagari-danger/30 p-5">

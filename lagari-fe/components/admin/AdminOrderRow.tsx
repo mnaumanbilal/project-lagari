@@ -6,6 +6,7 @@ import type { AdminOrderRow as AdminOrderRowType } from "@/lib/api/admin";
 import { ADMIN_ORDERS_PATH } from "@/lib/admin/constants";
 import { useAdminOrder } from "@/lib/admin/hooks/use-admin-queries";
 import { formatPkr } from "@/lib/format";
+import { AdminCustomerPhoneLinks, AdminOrderCustomerCell } from "./AdminCustomerPhoneLinks";
 import {
   AdminListCard,
   AdminListCardField,
@@ -93,9 +94,11 @@ export function AdminOrderTableRows({
             {row.itemPreview}
           </p>
         </td>
-        <td className={`${cellPad} align-middle`}>
-          <span className="font-medium">{row.customerName}</span>
-          <span className="block text-xs text-lagari-muted">{row.customerPhone}</span>
+        <td className={`${cellPad} align-top`}>
+          <AdminOrderCustomerCell
+            name={row.customerName}
+            phone={row.customerPhone}
+          />
         </td>
         <td className={`${cellPad} align-middle`}>
           <AdminOrderStatusBadge status={display?.status ?? row.status} />
@@ -217,7 +220,10 @@ export function AdminOrderCard({
 
       <AdminListCardFields className="mt-2 grid-cols-1 gap-y-2 sm:grid-cols-2 sm:gap-y-3">
         <AdminListCardField label="Customer" value={row.customerName} />
-        <AdminListCardField label="Phone" value={row.customerPhone} />
+        <AdminListCardField
+          label="Phone"
+          value={<AdminCustomerPhoneLinks phone={row.customerPhone} />}
+        />
         {!isDashboard ? (
           <AdminListCardField
             label="Date"

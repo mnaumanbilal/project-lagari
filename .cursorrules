@@ -39,3 +39,17 @@
 ## Implementation gate
 
 - **No** `lagari-be` or commerce UI until user approves P1 plan and says **execute** for P2+.
+
+## Admin search filters
+
+- **Debounce** text search (~350ms): local draft → URL commit → API fetch. See `docs/architecture/admin-ux.md` § Admin list filters & search.
+- **Product/review search:** match **slug or title** (partial, case-insensitive); use `search-text.ts` on BE, `productSearch` query param.
+- **Do not** hit the API on every keystroke; **do not** merge debounced values from stale React state — use `useDebouncedCommit` + URL noop guard.
+- **Errors:** `ErrorBoundary` on providers; route `error.tsx`; queries show inline retry — never let one failed fetch crash the app.
+
+## Resilience
+
+- **ErrorBoundary** wraps storefront + admin providers (`components/errors/ErrorBoundary.tsx`).
+- Route **`error.tsx`** on storefront and admin console; **`global-error.tsx`** at app root.
+- Debounced URL commits: `lib/hooks/use-debounced-commit.ts` (ref-stable callback, no infinite loops).
+- Invalid HTML: never nest block elements (e.g. `<div>`) inside `<p>`; `StarRating` uses `<span>`.

@@ -30,7 +30,7 @@ export function StarRating({
   const display = hover ?? value;
 
   return (
-    <div
+    <span
       className={`inline-flex items-center ${SIZE_CLASS[size]}`}
       role={interactive ? "radiogroup" : "img"}
       aria-label={label ?? `${value} out of ${max} stars`}
@@ -59,6 +59,6 @@ export function StarRating({
           </button>
         );
       })}
-    </div>
+    </span>
   );
 }

@@ -5,6 +5,8 @@ import {
   formatPkr,
   formatStatusLabel,
 } from "../services/admin-order-email";
+import { customerWhatsAppHref } from "../utils/customer-whatsapp";
+import { storefrontProductUrl } from "../utils/storefront-url";
 import {
   absoluteUrl,
   C,
@@ -22,6 +24,7 @@ export type AdminNotificationEmailContext = {
   linkPath?: string | null;
   payload?: Record<string, unknown> | null;
   siteBaseUrl: string;
+  storefrontSiteUrl: string;
 };
 
 const TYPE_LABELS: Record<AdminNotificationType, string> = {
@@ -49,13 +52,27 @@ function isOrderSnapshot(value: unknown): value is AdminOrderEmailSnapshot {
   );
 }
 
-function orderItemsTableHtml(order: AdminOrderEmailSnapshot): string {
+function orderItemTitleHtml(
+  title: string,
+  productSlug: string | null,
+  storefrontSiteUrl: string,
+): string {
+  const slug = productSlug?.trim();
+  if (!slug) return title;
+  const href = storefrontProductUrl(storefrontSiteUrl, slug);
+  return `<a href="${href}" style="color:${C.text};text-decoration:none;font-weight:500;">${title}</a>`;
+}
+
+function orderItemsTableHtml(
+  order: AdminOrderEmailSnapshot,
+  storefrontSiteUrl: string,
+): string {
   const rows = order.items
     .map(
       (item) =>
         `<tr>
           <td style="padding:10px 0;border-bottom:1px solid ${C.border};font-family:${FONT};color:${C.text};font-size:14px;font-weight:500;">
-            ${item.title}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
+            ${orderItemTitleHtml(item.title, item.productSlug, storefrontSiteUrl)}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
           </td>
           <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:center;font-family:${FONT};font-size:14px;color:${C.text};">×${item.quantity}</td>
           <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:right;font-family:${FONT};font-size:14px;font-weight:600;color:${C.text};">${formatPkr(item.lineTotalPkr)}</td>
@@ -96,6 +113,7 @@ function orderItemsTableHtml(order: AdminOrderEmailSnapshot): string {
 
 function orderDetailsHtml(
   order: AdminOrderEmailSnapshot,
+  storefrontSiteUrl: string,
   extras?: { fromStatus?: string; toStatus?: string },
 ): string {
   const placedAt = new Date(order.placedAt).toLocaleString("en-PK", {
@@ -119,7 +137,15 @@ function orderDetailsHtml(
 
   rows.push(
     emailDetailRow("Customer", order.customerName),
-    emailDetailRow("Phone", `<a href="tel:${order.customerPhone}" style="color:${C.text};text-decoration:none;">${order.customerPhone}</a>`),
+    emailDetailRow(
+      "Phone",
+      (() => {
+        const wa = customerWhatsAppHref(order.customerPhone);
+        const phoneLink = `<a href="tel:${order.customerPhone}" style="color:${C.text};text-decoration:none;">${order.customerPhone}</a>`;
+        if (!wa) return phoneLink;
+        return `${phoneLink} · <a href="${wa}" style="color:#25D366;text-decoration:none;font-weight:600;">WhatsApp</a>`;
+      })(),
+    ),
     emailDetailRow("Email", order.customerEmail
       ? `<a href="mailto:${order.customerEmail}" style="color:${C.label};text-decoration:none;">${order.customerEmail}</a>`
       : "—"),
@@ -152,7 +178,7 @@ function orderDetailsHtml(
   </table>
   <div style="margin:20px 0 0;">
     <p style="margin:0 0 8px;font-family:${FONT};font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:${C.label};">Line items · ${order.itemCount} piece${order.itemCount === 1 ? "" : "s"}</p>
-    ${orderItemsTableHtml(order)}
+    ${orderItemsTableHtml(order, storefrontSiteUrl)}
   </div>`;
 }
 
@@ -164,7 +190,7 @@ function detailRows(ctx: AdminNotificationEmailContext): string {
       typeof p.fromStatus === "string" && typeof p.toStatus === "string"
         ? { fromStatus: p.fromStatus, toStatus: p.toStatus }
         : undefined;
-    return orderDetailsHtml(p.order, extras);
+    return orderDetailsHtml(p.order, ctx.storefrontSiteUrl, extras);
   }
 
   const rows: string[] = [];
@@ -244,5 +270,6 @@ function buildAdminOrderPlainTextFromContext(ctx: AdminNotificationEmailContext)
     headline: ctx.body,
     fromStatus: typeof p.fromStatus === "string" ? p.fromStatus : undefined,
     toStatus: typeof p.toStatus === "string" ? p.toStatus : undefined,
+    storefrontSiteUrl: ctx.storefrontSiteUrl,
   });
 }

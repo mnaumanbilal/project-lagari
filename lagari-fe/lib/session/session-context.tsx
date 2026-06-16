@@ -13,6 +13,8 @@ import { createSession, touchSession } from "@/lib/api/session";
 
 const SESSION_STORAGE_KEY = "lagari_session_id";
 const VISITOR_STORAGE_KEY = "lagari_visitor_id";
+const SESSION_TOUCH_KEY = "lagari_session_touched_at";
+const SESSION_TOUCH_INTERVAL_MS = 60_000;
 
 function getOrCreateVisitorId(): string {
   const existing = localStorage.getItem(VISITOR_STORAGE_KEY);
@@ -46,6 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setVisitorId(session.visitorId);
     }
     sessionStorage.setItem(SESSION_STORAGE_KEY, session.id);
+    sessionStorage.setItem(SESSION_TOUCH_KEY, String(Date.now()));
     setSessionId(session.id);
     setReady(true);
     return session.id;
@@ -62,13 +65,26 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
     if (stored) {
+      setSessionId(stored);
+      const lastTouch = sessionStorage.getItem(SESSION_TOUCH_KEY);
+      const touchFresh =
+        lastTouch && Date.now() - Number(lastTouch) < SESSION_TOUCH_INTERVAL_MS;
+
+      if (touchFresh) {
+        setSessionId(stored);
+        setReady(true);
+        return stored;
+      }
+
       try {
         await touchSession(stored);
+        sessionStorage.setItem(SESSION_TOUCH_KEY, String(Date.now()));
         setSessionId(stored);
         setReady(true);
         return stored;
       } catch {
         sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        sessionStorage.removeItem(SESSION_TOUCH_KEY);
       }
     }
 

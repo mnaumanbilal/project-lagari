@@ -4,10 +4,13 @@ import {
   OrderItem,
   type OrderStatus,
 } from "../db/models";
+import { customerWhatsAppHref } from "../utils/customer-whatsapp";
+import { storefrontProductUrl } from "../utils/storefront-url";
 
 export type AdminOrderLineItem = {
   title: string;
   variant: string;
+  productSlug: string | null;
   quantity: number;
   unitPricePkr: number;
   lineTotalPkr: number;
@@ -78,6 +81,7 @@ export async function loadAdminOrderSnapshot(
     items: items.map((item) => ({
       title: item.productTitleSnapshot,
       variant: item.variantNameSnapshot,
+      productSlug: item.productSlugSnapshot,
       quantity: item.quantity,
       unitPricePkr: item.unitPricePkr,
       lineTotalPkr: item.unitPricePkr * item.quantity,
@@ -87,7 +91,12 @@ export async function loadAdminOrderSnapshot(
 
 export function buildAdminOrderPlainText(
   order: AdminOrderEmailSnapshot,
-  extras?: { fromStatus?: string; toStatus?: string; headline?: string },
+  extras?: {
+    fromStatus?: string;
+    toStatus?: string;
+    headline?: string;
+    storefrontSiteUrl?: string;
+  },
 ): string {
   const lines: string[] = [];
 
@@ -107,6 +116,9 @@ export function buildAdminOrderPlainText(
     "Customer",
     `Name: ${order.customerName}`,
     `Phone: ${order.customerPhone}`,
+    customerWhatsAppHref(order.customerPhone)
+      ? `WhatsApp: ${customerWhatsAppHref(order.customerPhone)}`
+      : "",
     `Email: ${order.customerEmail ?? "—"}`,
     "",
     "Delivery",
@@ -134,6 +146,9 @@ export function buildAdminOrderPlainText(
     lines.push(
       `• ${item.title} (${item.variant}) ×${item.quantity} @ ${formatPkr(item.unitPricePkr)} = ${formatPkr(item.lineTotalPkr)}`,
     );
+    if (item.productSlug && extras?.storefrontSiteUrl) {
+      lines.push(`  ${storefrontProductUrl(extras.storefrontSiteUrl, item.productSlug)}`);
+    }
   }
 
   lines.push(

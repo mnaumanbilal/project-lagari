@@ -6,6 +6,7 @@ import { useState } from "react";
 import { getDefaultVariant, isVariantPurchasable } from "@/lib/cart/helpers";
 import { useCart } from "@/lib/cart/cart-context";
 import { useSession } from "@/lib/session/session-context";
+import { useStorefrontToast } from "@/lib/storefront/toast-context";
 import type { CatalogProduct } from "@/lib/types/catalog";
 
 type Props = {
@@ -24,6 +25,7 @@ export function ProductCartActions({
   const router = useRouter();
   const { addItem, ready: cartReady } = useCart();
   const { ready: sessionReady } = useSession();
+  const toast = useStorefrontToast();
   const [loading, setLoading] = useState<"add" | "buy" | null>(null);
   const [added, setAdded] = useState(false);
 
@@ -41,6 +43,8 @@ export function ProductCartActions({
       await addItem(product, variantId, quantity);
       setAdded(true);
       window.setTimeout(() => setAdded(false), 2000);
+    } catch {
+      toast.error("Could not add item to bag. Please try again.");
     } finally {
       setLoading(null);
     }
@@ -52,6 +56,8 @@ export function ProductCartActions({
     try {
       await addItem(product, variantId, quantity);
       router.push("/checkout");
+    } catch {
+      toast.error("Could not add item to bag. Please try again.");
     } finally {
       setLoading(null);
     }

@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { Op } from "sequelize";
+import { Op, QueryTypes } from "sequelize";
 import { z } from "zod";
 import { Order, Product } from "../db/models";
 import * as adminProducts from "../services/admin.product.service";
@@ -14,24 +14,36 @@ export async function getMetricsSummary(_req: Request, res: Response) {
 
   const activeOrderWhere = { archivedAt: null };
 
-  const ordersToday = await Order.count({
-    where: { createdAt: { [Op.gte]: startOfDay }, ...activeOrderWhere },
-  });
+  const [
+    ordersToday,
+    revenueRows,
+    pendingOrders,
+    lowStockRows,
+    activeSessions,
+    pendingReviews,
+  ] = await Promise.all([
+    Order.count({
+      where: { createdAt: { [Op.gte]: startOfDay }, ...activeOrderWhere },
+    }),
+    Order.sequelize!.query<{ sum: string }>(
+      `SELECT COALESCE(SUM(total_pkr), 0)::text AS sum
+       FROM orders
+       WHERE created_at >= :start AND archived_at IS NULL`,
+      { replacements: { start: startOfDay }, type: QueryTypes.SELECT },
+    ),
+    Order.count({
+      where: { status: "pending", ...activeOrderWhere },
+    }),
+    Product.sequelize!.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM product_variants WHERE is_active = true AND stock <= low_stock_threshold;`,
+      { type: QueryTypes.SELECT },
+    ),
+    analytics.countActiveSessions(),
+    reviewService.countPendingReviews(),
+  ]);
 
-  const todayOrders = await Order.findAll({
-    where: { createdAt: { [Op.gte]: startOfDay }, ...activeOrderWhere },
-    attributes: ["totalPkr"],
-  });
-  const revenueTodayPkr = todayOrders.reduce((s, o) => s + o.totalPkr, 0);
-  const pendingOrders = await Order.count({
-    where: { status: "pending", ...activeOrderWhere },
-  });
-
-  const [lowStockRows] = await Product.sequelize!.query(
-    `SELECT COUNT(*)::int AS count FROM product_variants WHERE is_active = true AND stock <= low_stock_threshold;`,
-  );
-  const lowStockCount = (lowStockRows[0] as { count: number })?.count ?? 0;
-  const activeSessions = await analytics.countActiveSessions();
+  const revenueTodayPkr = Number(revenueRows[0]?.sum ?? 0);
+  const lowStockCount = lowStockRows[0]?.count ?? 0;
 
   res.json({
     ordersToday,
@@ -39,6 +51,7 @@ export async function getMetricsSummary(_req: Request, res: Response) {
     pendingOrders,
     lowStockCount,
     activeSessions,
+    pendingReviews,
   });
 }
 
@@ -58,15 +71,7 @@ export async function getAnalyticsOverview(req: Request, res: Response) {
 }
 
 export async function listAdminProducts(_req: Request, res: Response) {
-  const products = await Product.findAll({
-    where: { deletedAt: null },
-    attributes: ["id"],
-    order: [["createdAt", "DESC"]],
-  });
-  const mapped = await Promise.all(
-    products.map((p) => adminProducts.getAdminProduct(p.id)),
-  );
-  res.json(mapped);
+  res.json(await adminProducts.listAdminProducts());
 }
 
 export async function getAdminProduct(req: Request, res: Response) {
@@ -215,12 +220,45 @@ export async function bulkArchiveAdminOrders(req: Request, res: Response) {
 }
 
 const reviewStatusQuery = z.object({
-  status: z.enum(["pending", "published"]).default("pending"),
+  status: z.enum(["all", "pending", "published"]).default("all"),
+  productSearch: z.string().max(120).optional(),
+  productSlug: z.string().max(120).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  sort: z
+    .enum(["newest", "oldest", "rating_high", "rating_low"])
+    .optional(),
+  ratingMin: z.coerce.number().int().min(1).max(5).optional(),
+  ratingMax: z.coerce.number().int().min(1).max(5).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().optional(),
 });
 
 export async function listAdminReviews(req: Request, res: Response) {
-  const { status } = reviewStatusQuery.parse(req.query);
-  res.json(await reviewService.listAdminReviews(status));
+  const query = reviewStatusQuery.parse(req.query);
+  res.json(
+    await reviewService.listAdminReviews({
+      status: query.status,
+      productSearch: query.productSearch ?? query.productSlug,
+      from: query.from ? new Date(query.from) : undefined,
+      to: query.to ? new Date(query.to) : undefined,
+      sort: query.sort,
+      ratingMin: query.ratingMin,
+      ratingMax: query.ratingMax,
+      page: query.page,
+      limit: query.limit,
+    }),
+  );
+}
+
+export async function getReviewAnalytics(req: Request, res: Response) {
+  try {
+    const range = resolveAnalyticsRange(req.query);
+    res.json(await reviewService.getReviewAnalytics(range.from, range.to));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid date range";
+    res.status(400).json({ error: message });
+  }
 }
 
 const reviewPatchSchema = z.object({
@@ -236,6 +274,15 @@ export async function patchAdminReview(req: Request, res: Response) {
 export async function deleteAdminReview(req: Request, res: Response) {
   await reviewService.deleteReview(String(req.params.id));
   res.status(204).send();
+}
+
+export async function getReviewLinkedOrder(req: Request, res: Response) {
+  const linked = await reviewService.getLinkedOrderForReview(String(req.params.id));
+  if (!linked) {
+    res.status(404).json({ error: "No linked order found for this review." });
+    return;
+  }
+  res.json(linked);
 }
 
 export async function bulkDeleteAdminReviews(req: Request, res: Response) {

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  checkReviewEligibility,
   getProductBySlug,
   getSiteConfig,
   listCategories,
@@ -11,11 +12,15 @@ import {
 import { catchAsync } from "../utils/catchAsync";
 
 const router = Router();
+
 router.get("/catalog/site-config", catchAsync(getSiteConfig));
 router.get("/catalog/categories", catchAsync(listCategories));
 router.get("/catalog/note-tags", catchAsync(listNoteTags));
 router.get("/catalog/products", catchAsync(listProducts));
 router.get("/catalog/products/:slug", catchAsync(getProductBySlug));
 router.get("/catalog/products/:slug/reviews", catchAsync(listProductReviews));
+// Eligibility MUST be registered before the generic POST so Express doesn't mistake it for a slug
+router.get("/catalog/products/:slug/reviews/eligibility", catchAsync(checkReviewEligibility));
 router.post("/catalog/products/:slug/reviews", catchAsync(submitProductReview));
+
 export default router;

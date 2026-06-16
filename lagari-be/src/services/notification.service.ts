@@ -55,6 +55,7 @@ function dispatchExternalChannels(input: EmitNotificationInput): void {
       linkPath: input.linkPath,
       payload: input.payload,
       siteBaseUrl: env.domain,
+      storefrontSiteUrl: env.publicSiteUrl.replace(/\/$/, ""),
     });
     void sendAdminEmail(mail).catch((err) => {
       console.error("admin email failed:", err);

@@ -63,7 +63,7 @@ function mapApiCart(
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const { ready: sessionReady, ensureSession, refreshSession } = useSession();
+  const { sessionId, ready: sessionReady, ensureSession, refreshSession } = useSession();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [subtotalPkr, setSubtotalPkr] = useState(0);
   const [imageByVariant, setImageByVariant] = useState<Record<string, string>>(
@@ -89,7 +89,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!USE_API || !sessionReady) return;
+    if (!USE_API || !sessionId) return;
 
     let cancelled = false;
     runCartOp((id) => cartApi.fetchCart(id))
@@ -106,7 +106,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [sessionReady, runCartOp, applyCart]);
+  }, [sessionId, runCartOp, applyCart]);
 
   const itemCount = useMemo(
     () => lines.reduce((s, l) => s + l.quantity, 0),

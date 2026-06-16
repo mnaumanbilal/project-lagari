@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
   useCallback,
@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { replaceShopUrl, parseShopFilters } from "@/lib/catalog/shop-url";
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value";
 import { SEARCH_DEBOUNCE_MS } from "@/lib/catalog/product-queries";
 
@@ -25,34 +26,40 @@ const ProductSearchContext = createContext<ProductSearchContextValue | null>(
 );
 
 export function ProductSearchProvider({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const urlQuery = searchParams.get("q") ?? "";
+  const urlQuery = pathname === "/shop" ? (searchParams.get("q") ?? "") : "";
 
   const [query, setQueryState] = useState(urlQuery);
   const debouncedQ = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
   const lastCommittedQ = useRef(urlQuery);
 
   useEffect(() => {
+    if (pathname !== "/shop") return;
     if (urlQuery === lastCommittedQ.current) return;
     lastCommittedQ.current = urlQuery;
     setQueryState(urlQuery);
-  }, [urlQuery]);
+  }, [pathname, urlQuery]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (pathname !== "/shop") return;
+      const fromUrl = parseShopFilters(window.location.search).q;
+      lastCommittedQ.current = fromUrl;
+      setQueryState(fromUrl);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [pathname]);
 
   useEffect(() => {
     if (pathname !== "/shop") return;
     if (debouncedQ === lastCommittedQ.current) return;
 
     lastCommittedQ.current = debouncedQ;
-
-    const params = new URLSearchParams(window.location.search);
-    if (debouncedQ) params.set("q", debouncedQ);
-    else params.delete("q");
-
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [debouncedQ, pathname, router]);
+    const current = parseShopFilters(window.location.search);
+    replaceShopUrl({ ...current, q: debouncedQ });
+  }, [debouncedQ, pathname]);
 
   const setQuery = useCallback((value: string) => {
     setQueryState(value);

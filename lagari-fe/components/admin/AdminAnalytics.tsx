@@ -360,6 +360,102 @@ export function AdminAnalytics() {
               </ul>
             </section>
           ) : null}
+
+          {data.reviewMetrics ? (
+            <section className="mt-12">
+              <h2 className="font-display text-xl font-semibold">Reviews</h2>
+              <dl className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Card
+                  label="Pending moderation"
+                  value={String(data.reviewMetrics.pendingCount)}
+                />
+                <Card
+                  label="Submitted in range"
+                  value={String(data.reviewMetrics.submittedInRange)}
+                />
+                <Card
+                  label="Site average rating"
+                  value={
+                    data.reviewMetrics.averageRatingSiteWide > 0
+                      ? `${data.reviewMetrics.averageRatingSiteWide.toFixed(1)} ★`
+                      : "—"
+                  }
+                />
+                <Card
+                  label="Verified purchases"
+                  value={`${data.reviewMetrics.verifiedShare}%`}
+                />
+              </dl>
+
+              {data.reviewMetrics.topRatedProducts.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="font-display text-lg font-semibold">Top rated products</h3>
+                  <ul className="mt-3 space-y-2">
+                    {data.reviewMetrics.topRatedProducts.map((row) => (
+                      <li
+                        key={row.productId}
+                        className="admin-card flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+                      >
+                        <div>
+                          <Link
+                            href={`/product/${row.productSlug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-lagari-primary hover:text-lagari-brass"
+                          >
+                            {row.productTitle}
+                          </Link>
+                          <p className="text-xs text-lagari-muted">
+                            {row.averageRating.toFixed(1)} ★ · {row.reviewCount} reviews
+                          </p>
+                        </div>
+                        <Link
+                          href={`/admin-panel-route/products/${row.productId}/edit`}
+                          className="text-xs text-lagari-brass hover:underline"
+                        >
+                          Edit
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {data.reviewMetrics.mostReviewedProducts.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="font-display text-lg font-semibold">Most reviewed</h3>
+                  <ul className="mt-3 space-y-2">
+                    {data.reviewMetrics.mostReviewedProducts.map((row) => (
+                      <li
+                        key={`most-${row.productId}`}
+                        className="admin-card flex flex-wrap items-center justify-between gap-2 p-3 text-sm"
+                      >
+                        <div>
+                          <Link
+                            href={`/product/${row.productSlug}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-lagari-primary hover:text-lagari-brass"
+                          >
+                            {row.productTitle}
+                          </Link>
+                          <p className="text-xs text-lagari-muted">
+                            {row.reviewCount} reviews · {row.averageRating.toFixed(1)} ★
+                          </p>
+                        </div>
+                        <Link
+                          href={`/admin-panel-route/products/${row.productId}/edit`}
+                          className="text-xs text-lagari-brass hover:underline"
+                        >
+                          Edit
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </section>
+          ) : null}
         </>
       )}
     </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { AdminProduct } from "@/lib/api/admin";
 import { formatPkr } from "@/lib/format";
+import { ProductRatingSummary } from "@/components/storefront/ProductRatingSummary";
 import {
   AdminListCard,
   AdminListCardField,
@@ -36,6 +37,13 @@ export function AdminProductTableRow({
       </td>
       <td className="px-4 py-3">{p.title}</td>
       <td className="px-4 py-3 text-lagari-muted">{p.slug}</td>
+      <td className="px-4 py-3">
+        {p.reviewSummary && p.reviewSummary.totalCount > 0 ? (
+          <ProductRatingSummary summary={p.reviewSummary} size="sm" />
+        ) : (
+          <span className="text-lagari-muted">—</span>
+        )}
+      </td>
       <td className="px-4 py-3">{p.isPublished ? "Yes" : "No"}</td>
       <td className="px-4 py-3">{formatPkr(p.fromPricePkr ?? 0)}</td>
       <td className="px-4 py-3 text-right">
@@ -75,6 +83,9 @@ export function AdminProductCard({
             <div className="min-w-0 flex-1">
               <p className="font-medium text-lagari-primary">{p.title}</p>
               <p className="mt-0.5 break-all text-xs text-lagari-muted">{p.slug}</p>
+              <div className="mt-1">
+                <ProductRatingSummary summary={p.reviewSummary} size="sm" />
+              </div>
             </div>
             <AdminRowActionsMenu
               menuLabel={`Actions for ${p.title}`}

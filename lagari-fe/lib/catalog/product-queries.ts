@@ -13,7 +13,7 @@ export type ProductSearchFilters = {
   q?: string;
 };
 
-export const SEARCH_DEBOUNCE_MS = 2500;
+export const SEARCH_DEBOUNCE_MS = 400;
 
 export const catalogQueryKeys = {
   products: (filters: ProductSearchFilters) =>

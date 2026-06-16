@@ -7,6 +7,10 @@ import {
   ProductVariant,
 } from "../db/models";
 import { optimizeDeliveryUrl } from "../utils/cloudinary-delivery";
+import {
+  getProductReviewSummary,
+  getReviewSummariesForProducts,
+} from "./review.service";
 
 function mapVariant(v: ProductVariant) {
   return {
@@ -146,6 +150,7 @@ export async function listProducts(query: {
     const images = (p as Product & { images?: ProductImage[] }).images ?? [];
     const pricing = listPricing(variants);
     return {
+      id: p.id,
       slug: p.slug,
       title: p.title,
       designerInspiration: p.designerInspiration,
@@ -156,7 +161,13 @@ export async function listProducts(query: {
     };
   });
 
-  return { items, page, total: count };
+  const summaryMap = await getReviewSummariesForProducts(items.map((i) => i.id));
+  const itemsWithReviews = items.map((item) => ({
+    ...item,
+    reviewSummary: summaryMap.get(item.id) ?? null,
+  }));
+
+  return { items: itemsWithReviews, page, total: count };
 }
 
 export async function getProductBySlug(slug: string) {
@@ -171,6 +182,8 @@ export async function getProductBySlug(slug: string) {
   });
 
   if (!product) return null;
+
+  const reviewSummary = await getProductReviewSummary(product.id);
 
   const categories =
     (product as Product & { categories?: Category[] }).categories ?? [];
@@ -202,5 +215,6 @@ export async function getProductBySlug(slug: string) {
           optimizeDeliveryUrl(i.url, { width: 1200, crop: "limit" }) ?? i.url,
         isHero: i.isHero,
       })),
+    reviewSummary,
   };
 }

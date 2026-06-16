@@ -8,6 +8,7 @@ import {
   Order,
 } from "../db/models";
 import type { AnalyticsRange } from "../utils/analytics-range";
+import { getReviewAnalytics } from "./review.service";
 import {
   ANALYTICS_EVENT_NAMES,
   computeDedupKey,
@@ -91,47 +92,53 @@ export async function countActiveSessions(): Promise<number> {
 export async function getAnalyticsOverview(range: AnalyticsRange) {
   const { from, to, label, preset } = range;
 
-  const uniqueVisitors = await AnalyticsSession.count({
-    where: {
-      visitorId: { [Op.ne]: null },
-      lastActivityAt: { [Op.gte]: from, [Op.lte]: to },
-    },
-    distinct: true,
-    col: "visitor_id",
-  });
-
-  const newVisitors = await AnalyticsVisitor.count({
-    where: { firstSeenAt: { [Op.gte]: from, [Op.lte]: to } },
-  });
-
-  const returningVisitors = Math.max(0, uniqueVisitors - newVisitors);
-
-  const activeSessions = await countActiveSessions();
-
-  const cancelledOrders = await Order.count({
-    where: {
-      status: "cancelled",
-      createdAt: { [Op.gte]: from, [Op.lte]: to },
-    },
-  });
-
-  const ordersPlacedInRange = await Order.count({
-    where: {
-      createdAt: { [Op.gte]: from, [Op.lte]: to },
-      status: { [Op.ne]: "cancelled" },
-    },
-  });
-
-  const funnelRows = await sequelize.query<{
-    product_view_sessions: string;
-    add_to_cart_sessions: string;
-    view_then_cart_sessions: string;
-    checkout_starts: string;
-    cart_then_checkout_sessions: string;
-    checkout_conversions: string;
-    order_placed_sessions: string;
-  }>(
-    `
+  const [
+    uniqueVisitors,
+    newVisitors,
+    activeSessions,
+    cancelledOrders,
+    ordersPlacedInRange,
+    funnelRows,
+    cartAbandonRows,
+    topProducts,
+    topSearches,
+    categoryInterest,
+    reviewAnalytics,
+  ] = await Promise.all([
+    AnalyticsSession.count({
+      where: {
+        visitorId: { [Op.ne]: null },
+        lastActivityAt: { [Op.gte]: from, [Op.lte]: to },
+      },
+      distinct: true,
+      col: "visitor_id",
+    }),
+    AnalyticsVisitor.count({
+      where: { firstSeenAt: { [Op.gte]: from, [Op.lte]: to } },
+    }),
+    countActiveSessions(),
+    Order.count({
+      where: {
+        status: "cancelled",
+        createdAt: { [Op.gte]: from, [Op.lte]: to },
+      },
+    }),
+    Order.count({
+      where: {
+        createdAt: { [Op.gte]: from, [Op.lte]: to },
+        status: { [Op.ne]: "cancelled" },
+      },
+    }),
+    sequelize.query<{
+      product_view_sessions: string;
+      add_to_cart_sessions: string;
+      view_then_cart_sessions: string;
+      checkout_starts: string;
+      cart_then_checkout_sessions: string;
+      checkout_conversions: string;
+      order_placed_sessions: string;
+    }>(
+      `
     WITH product_views AS (
       SELECT DISTINCT e.session_id
       FROM analytics_events e
@@ -177,20 +184,10 @@ export async function getAnalyticsOverview(range: AnalyticsRange) {
       )) AS checkout_conversions,
       (SELECT COUNT(*)::text FROM orders_placed) AS order_placed_sessions;
     `,
-    { replacements: { from, to }, type: QueryTypes.SELECT },
-  );
-
-  const funnel = funnelRows[0];
-  const productViewSessions = Number(funnel?.product_view_sessions ?? 0);
-  const addToCartSessions = Number(funnel?.add_to_cart_sessions ?? 0);
-  const viewThenCartSessions = Number(funnel?.view_then_cart_sessions ?? 0);
-  const checkoutStarts = Number(funnel?.checkout_starts ?? 0);
-  const cartThenCheckoutSessions = Number(funnel?.cart_then_checkout_sessions ?? 0);
-  const checkoutConversions = Number(funnel?.checkout_conversions ?? 0);
-  const orderPlacedSessions = Number(funnel?.order_placed_sessions ?? 0);
-
-  const cartAbandonRows = await sequelize.query<{ count: string }>(
-    `
+      { replacements: { from, to }, type: QueryTypes.SELECT },
+    ),
+    sequelize.query<{ count: string }>(
+      `
     SELECT COUNT(DISTINCT a.session_id)::text AS count
     FROM analytics_events a
     WHERE a.event_name = 'add_to_cart'
@@ -202,19 +199,17 @@ export async function getAnalyticsOverview(range: AnalyticsRange) {
           AND c.created_at >= :from AND c.created_at <= :to
       );
     `,
-    { replacements: { from, to }, type: QueryTypes.SELECT },
-  );
-  const cartAbandonSessions = Number(cartAbandonRows[0]?.count ?? 0);
-
-  const topProducts = await sequelize.query<{
-    product_slug: string;
-    product_id: string | null;
-    product_title: string | null;
-    unique_viewers: string;
-    total_views: string;
-    add_to_cart_sessions: string;
-  }>(
-    `
+      { replacements: { from, to }, type: QueryTypes.SELECT },
+    ),
+    sequelize.query<{
+      product_slug: string;
+      product_id: string | null;
+      product_title: string | null;
+      unique_viewers: string;
+      total_views: string;
+      add_to_cart_sessions: string;
+    }>(
+      `
     WITH views AS (
       SELECT
         e.payload->>'productSlug' AS slug,
@@ -265,14 +260,13 @@ export async function getAnalyticsOverview(range: AnalyticsRange) {
     ORDER BY combined.unique_viewers DESC, combined.total_views DESC
     LIMIT 20;
     `,
-    { replacements: { from, to }, type: QueryTypes.SELECT },
-  );
-
-  const topSearches = await sequelize.query<{
-    query: string;
-    unique_sessions: string;
-  }>(
-    `
+      { replacements: { from, to }, type: QueryTypes.SELECT },
+    ),
+    sequelize.query<{
+      query: string;
+      unique_sessions: string;
+    }>(
+      `
     SELECT
       e.payload->>'query' AS query,
       COUNT(DISTINCT e.session_id)::text AS unique_sessions
@@ -285,14 +279,13 @@ export async function getAnalyticsOverview(range: AnalyticsRange) {
     ORDER BY COUNT(DISTINCT e.session_id) DESC
     LIMIT 15;
     `,
-    { replacements: { from, to }, type: QueryTypes.SELECT },
-  );
-
-  const categoryInterest = await sequelize.query<{
-    category: string;
-    unique_sessions: string;
-  }>(
-    `
+      { replacements: { from, to }, type: QueryTypes.SELECT },
+    ),
+    sequelize.query<{
+      category: string;
+      unique_sessions: string;
+    }>(
+      `
     SELECT
       e.payload->>'category' AS category,
       COUNT(DISTINCT e.session_id)::text AS unique_sessions
@@ -304,8 +297,21 @@ export async function getAnalyticsOverview(range: AnalyticsRange) {
     ORDER BY COUNT(DISTINCT e.session_id) DESC
     LIMIT 15;
     `,
-    { replacements: { from, to }, type: QueryTypes.SELECT },
-  );
+      { replacements: { from, to }, type: QueryTypes.SELECT },
+    ),
+    getReviewAnalytics(from, to),
+  ]);
+
+  const returningVisitors = Math.max(0, uniqueVisitors - newVisitors);
+  const funnel = funnelRows[0];
+  const productViewSessions = Number(funnel?.product_view_sessions ?? 0);
+  const addToCartSessions = Number(funnel?.add_to_cart_sessions ?? 0);
+  const viewThenCartSessions = Number(funnel?.view_then_cart_sessions ?? 0);
+  const checkoutStarts = Number(funnel?.checkout_starts ?? 0);
+  const cartThenCheckoutSessions = Number(funnel?.cart_then_checkout_sessions ?? 0);
+  const checkoutConversions = Number(funnel?.checkout_conversions ?? 0);
+  const orderPlacedSessions = Number(funnel?.order_placed_sessions ?? 0);
+  const cartAbandonSessions = Number(cartAbandonRows[0]?.count ?? 0);
 
   const cartDropOffRate = pct(checkoutStarts - checkoutConversions, checkoutStarts);
   const checkoutConversionRate = pct(checkoutConversions, checkoutStarts);
@@ -370,5 +376,15 @@ export async function getAnalyticsOverview(range: AnalyticsRange) {
       productSlug: r.product_slug,
       views: Number(r.total_views),
     })),
+    reviewMetrics: {
+      pendingCount: reviewAnalytics.pendingCount,
+      publishedCount: reviewAnalytics.publishedCount,
+      submittedInRange: reviewAnalytics.submittedInRange,
+      averageRatingSiteWide: reviewAnalytics.averageRatingSiteWide,
+      verifiedShare: reviewAnalytics.verifiedShare,
+      ratingDistribution: reviewAnalytics.ratingDistribution,
+      topRatedProducts: reviewAnalytics.topRatedProducts,
+      mostReviewedProducts: reviewAnalytics.mostReviewedProducts,
+    },
   };
 }

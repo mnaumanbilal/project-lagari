@@ -1,3 +1,5 @@
+import { AdminCustomerPhoneLinks } from "./AdminCustomerPhoneLinks";
+
 type Props = {
   name: string;
   phone: string;
@@ -28,9 +30,7 @@ export function AdminOrderCustomerSummary({
         <div className={dense ? "" : "sm:contents"}>
           <dt className="text-lagari-muted">Phone</dt>
           <dd>
-            <a href={`tel:${phone}`} className="font-medium text-lagari-brass hover:underline">
-              {phone}
-            </a>
+            <AdminCustomerPhoneLinks phone={phone} />
           </dd>
         </div>
         {email ? (

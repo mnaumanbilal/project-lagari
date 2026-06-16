@@ -1,5 +1,5 @@
 import { adminApiFetch } from "./admin-client";
-import type { CatalogProduct } from "@/lib/types/catalog";
+import type { CatalogProduct, ReviewSummary } from "@/lib/types/catalog";
 
 export type AdminMetrics = {
   ordersToday: number;
@@ -7,6 +7,7 @@ export type AdminMetrics = {
   pendingOrders: number;
   lowStockCount: number;
   activeSessions: number;
+  pendingReviews: number;
 };
 
 export type AdminOrderRow = {
@@ -33,6 +34,7 @@ export type AdminOrderItem = {
   id: string;
   variantId: string;
   productTitleSnapshot: string;
+  productSlugSnapshot: string | null;
   variantNameSnapshot: string;
   unitPricePkr: number;
   quantity: number;
@@ -134,12 +136,35 @@ export type AnalyticsOverview = {
   topSearches: Array<{ query: string; uniqueSessions: number }>;
   categoryInterest: Array<{ category: string; uniqueSessions: number }>;
   topProductsByViews: Array<{ productSlug: string; views: number }>;
+  reviewMetrics?: ReviewAnalyticsMetrics;
+};
+
+export type ReviewAnalyticsProductRow = {
+  productId: string;
+  productSlug: string;
+  productTitle: string;
+  averageRating: number;
+  reviewCount: number;
+};
+
+export type ReviewAnalyticsMetrics = {
+  pendingCount: number;
+  publishedCount: number;
+  submittedInRange: number;
+  averageRatingSiteWide: number;
+  verifiedShare: number;
+  ratingDistribution: Record<string, number>;
+  topRatedProducts: ReviewAnalyticsProductRow[];
+  mostReviewedProducts: ReviewAnalyticsProductRow[];
 };
 
 export type AdminReview = {
   id: string;
+  productId: string;
   productSlug: string;
   productTitle: string;
+  /** FK to customers — null for Shopify-imported reviews */
+  customerId: string | null;
   authorName: string;
   rating: number;
   body: string;
@@ -147,6 +172,54 @@ export type AdminReview = {
   isPublished: boolean;
   isVerifiedPurchase: boolean;
   createdAt: string;
+  /** Contact used at submission — visible to admin only */
+  contactPhoneNormalized: string | null;
+  contactEmailNormalized: string | null;
+};
+
+export type ReviewLinkedOrderItem = {
+  id: string;
+  productTitleSnapshot: string;
+  variantNameSnapshot: string;
+  quantity: number;
+  unitPricePkr: number;
+  lineTotalPkr: number;
+};
+
+export type ReviewLinkedOrder = {
+  orderId: string;
+  orderNumber: number;
+  status: string;
+  createdAt: string;
+  totalPkr: number;
+  subtotalPkr: number;
+  discountPkr: number;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  shippingCity: string;
+  shippingAddress: string;
+  items: ReviewLinkedOrderItem[];
+};
+
+export type FetchAdminReviewsParams = {
+  status: "all" | "pending" | "published";
+  /** Partial match on product slug or title (case-insensitive). */
+  productSearch?: string;
+  from?: string;
+  to?: string;
+  sort?: "newest" | "oldest" | "rating_high" | "rating_low";
+  ratingMin?: number;
+  ratingMax?: number;
+  page?: number;
+  limit?: number;
+};
+
+export type AdminReviewsListResponse = {
+  reviews: AdminReview[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 function authHeaders(accessToken: string) {
@@ -228,6 +301,7 @@ export function normalizeAnalyticsOverview(
     topSearches: raw.topSearches ?? [],
     categoryInterest: raw.categoryInterest ?? [],
     topProductsByViews: legacyViews,
+    reviewMetrics: raw.reviewMetrics,
   };
 }
 
@@ -395,10 +469,33 @@ export async function bulkArchiveAdminOrders(
 
 export async function fetchAdminReviews(
   accessToken: string,
-  status: "pending" | "published",
-): Promise<AdminReview[]> {
-  return adminApiFetch<AdminReview[]>(
-    `/admin/reviews?status=${status}`,
+  params: FetchAdminReviewsParams,
+): Promise<AdminReviewsListResponse> {
+  const q = new URLSearchParams({ status: params.status });
+  if (params.productSearch) q.set("productSearch", params.productSearch);
+  if (params.from) q.set("from", params.from);
+  if (params.to) q.set("to", params.to);
+  if (params.sort) q.set("sort", params.sort);
+  if (params.ratingMin != null) q.set("ratingMin", String(params.ratingMin));
+  if (params.ratingMax != null) q.set("ratingMax", String(params.ratingMax));
+  if (params.page != null) q.set("page", String(params.page));
+  if (params.limit != null) q.set("limit", String(params.limit));
+  return adminApiFetch<AdminReviewsListResponse>(
+    `/admin/reviews?${q.toString()}`,
+    authHeaders(accessToken),
+  );
+}
+
+export async function fetchReviewAnalytics(
+  accessToken: string,
+  range: AnalyticsRangeParams,
+): Promise<ReviewAnalyticsMetrics> {
+  const q =
+    "preset" in range
+      ? new URLSearchParams({ preset: range.preset })
+      : new URLSearchParams({ from: range.from, to: range.to });
+  return adminApiFetch<ReviewAnalyticsMetrics>(
+    `/admin/reviews/analytics?${q.toString()}`,
     authHeaders(accessToken),
   );
 }
@@ -458,4 +555,24 @@ export async function importShopifyReviews(
     body: JSON.stringify({ reviews, publishByDefault }),
     ...authHeaders(accessToken),
   });
+}
+
+/**
+ * Returns the most recent qualifying order that backs a verified review.
+ * Returns null (404) when no linked order could be found.
+ */
+export async function fetchReviewLinkedOrder(
+  accessToken: string,
+  reviewId: string,
+): Promise<ReviewLinkedOrder | null> {
+  try {
+    return await adminApiFetch<ReviewLinkedOrder>(
+      `/admin/reviews/${reviewId}/linked-order`,
+      authHeaders(accessToken),
+    );
+  } catch (err: unknown) {
+    // 404 means no linked order — not a hard error
+    if (err && typeof err === "object" && "status" in err && (err as { status: number }).status === 404) return null;
+    throw err;
+  }
 }

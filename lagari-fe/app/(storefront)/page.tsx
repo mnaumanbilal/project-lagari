@@ -1,17 +1,24 @@
+import { Suspense } from "react";
 import { HeroBanner } from "@/components/storefront/HeroBanner";
 import { HomeProductsSection } from "@/components/storefront/HomeProductsSection";
+import { StorefrontLoading } from "@/components/storefront/StorefrontLoading";
 import { listProducts } from "@/lib/catalog";
 
 export const revalidate = 60;
 
-export default async function HomePage() {
+async function HomeProductsLoader() {
   const products = await listProducts();
+  return <HomeProductsSection products={products} />;
+}
 
+export default function HomePage() {
   return (
     <>
       <HeroBanner />
 
-      <HomeProductsSection products={products} />
+      <Suspense fallback={<StorefrontLoading />}>
+        <HomeProductsLoader />
+      </Suspense>
 
       <section className="border-t border-lagari-border bg-lagari-elevated">
         <div className="mx-auto max-w-7xl px-4 py-14 text-center sm:px-6">

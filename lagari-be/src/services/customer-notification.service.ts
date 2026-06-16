@@ -45,6 +45,7 @@ async function loadOrderContext(
     items: items.map((item) => ({
       title: item.productTitleSnapshot,
       variant: item.variantNameSnapshot,
+      productSlug: item.productSlugSnapshot,
       quantity: item.quantity,
       lineTotalPkr: item.unitPricePkr * item.quantity,
     })),

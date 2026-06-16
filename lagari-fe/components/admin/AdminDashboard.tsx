@@ -7,6 +7,7 @@ import {
   ADMIN_ANALYTICS_PATH,
   ADMIN_ORDERS_PATH,
   ADMIN_PRODUCTS_PATH,
+  ADMIN_REVIEWS_PATH,
 } from "@/lib/admin/constants";
 import { adminKeys } from "@/lib/admin/admin-query-keys";
 import { useAdminMetrics, useAdminOrders } from "@/lib/admin/hooks/use-admin-queries";
@@ -40,7 +41,7 @@ export function AdminDashboard() {
       )}
 
       {metrics && (
-        <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <dl className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard label="Orders today" value={String(metrics.ordersToday)} />
           <MetricCard
             label="Revenue today"
@@ -55,6 +56,11 @@ export function AdminDashboard() {
             label="Low stock SKUs"
             value={String(metrics.lowStockCount)}
             href={ADMIN_PRODUCTS_PATH}
+          />
+          <MetricCard
+            label="Pending reviews"
+            value={String(metrics.pendingReviews ?? 0)}
+            href={`${ADMIN_REVIEWS_PATH}?status=pending`}
           />
           <MetricCard
             label="Active sessions"
@@ -86,7 +92,7 @@ export function AdminDashboard() {
                   <tr>
                     <th className="w-10 px-4 py-3" aria-label="Expand" />
                     <th className="px-4 py-3">Order</th>
-                    <th className="px-4 py-3">Customer</th>
+                    <th className="min-w-[10rem] px-4 py-3">Customer</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Total</th>
                     <th className="px-4 py-3 text-right">Actions</th>

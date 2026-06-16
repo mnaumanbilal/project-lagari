@@ -1,17 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StarRating } from "@/components/storefront/StarRating";
 import { USE_API } from "@/lib/api/config";
 import {
   EMPTY_SUMMARY,
   fetchProductReviews,
+  fetchReviewEligibility,
   submitProductReview,
   type ProductReview,
   type ReviewSummary,
 } from "@/lib/api/reviews";
-import { ApiError } from "@/lib/api/client";
 import { useSession } from "@/lib/session/session-context";
+import {
+  eligibilityToFieldErrors,
+  parseStorefrontApiError,
+  reportStorefrontErrors,
+  type StorefrontFieldErrors,
+} from "@/lib/storefront/api-errors";
+
+/** How long to wait after the user stops typing before checking eligibility (ms). */
+const ELIGIBILITY_DEBOUNCE_MS = 700;
 
 function formatReviewDate(iso: string) {
   try {
@@ -24,17 +33,39 @@ function formatReviewDate(iso: string) {
   }
 }
 
+function FieldError({ message }: { message: string | undefined }) {
+  if (!message) return null;
+  return <p className="mt-1 text-xs text-lagari-danger">{message}</p>;
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 export function ProductReviews({ slug }: { slug: string }) {
   const { sessionId } = useSession();
+
+  // --- Loaded reviews ---
   const [reviews, setReviews] = useState<ProductReview[]>([]);
   const [summary, setSummary] = useState<ReviewSummary>(EMPTY_SUMMARY);
+
+  // --- Form state ---
   const [authorName, setAuthorName] = useState("");
   const [rating, setRating] = useState(5);
   const [body, setBody] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+
+  // --- Eligibility + field errors ---
+  const [fieldErrors, setFieldErrors] = useState<StorefrontFieldErrors>({});
+  const [eligibilityOk, setEligibilityOk] = useState(false);
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+  const eligibilityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- Submission state ---
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // --- Load published reviews ---
   const loadReviews = useCallback(async () => {
     if (!USE_API) return;
     try {
@@ -51,36 +82,113 @@ export function ProductReviews({ slug }: { slug: string }) {
     void loadReviews();
   }, [loadReviews]);
 
+  // --- Debounced eligibility check ---
+  const triggerEligibilityCheck = useCallback(
+    (phone: string, email: string) => {
+      if (!USE_API) return;
+
+      if (eligibilityTimer.current) clearTimeout(eligibilityTimer.current);
+
+      if (!phone.trim() && !email.trim()) {
+        setEligibilityOk(false);
+        setFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next.contactPhone;
+          delete next.contactEmail;
+          delete next._contact;
+          return next;
+        });
+        return;
+      }
+
+      eligibilityTimer.current = setTimeout(async () => {
+        setEligibilityLoading(true);
+        try {
+          const result = await fetchReviewEligibility(slug, {
+            contactPhone: phone.trim() || undefined,
+            contactEmail: email.trim() || undefined,
+          });
+
+          if (result.canSubmit) {
+            setEligibilityOk(true);
+            // Clear any previous contact errors
+            setFieldErrors((prev) => {
+              const next = { ...prev };
+              delete next.contactPhone;
+              delete next.contactEmail;
+              delete next._contact;
+              return next;
+            });
+          } else {
+            setEligibilityOk(false);
+            // Only show contact-field errors inline during live check;
+            // skip transient states (still-typing) to avoid nagging
+            if (
+              result.reason !== "contact_required" &&
+              result.reason !== "contact_invalid"
+            ) {
+              const errs = eligibilityToFieldErrors(result);
+              setFieldErrors((prev) => ({ ...prev, ...errs }));
+            }
+          }
+        } catch {
+          // Non-critical — silently ignore network errors during live check
+          setEligibilityOk(false);
+        } finally {
+          setEligibilityLoading(false);
+        }
+      }, ELIGIBILITY_DEBOUNCE_MS);
+    },
+    [slug],
+  );
+
+  // Re-run eligibility whenever contact fields change
+  useEffect(() => {
+    triggerEligibilityCheck(contactPhone, contactEmail);
+    // Cancel timer on unmount
+    return () => {
+      if (eligibilityTimer.current) clearTimeout(eligibilityTimer.current);
+    };
+  }, [contactPhone, contactEmail, triggerEligibilityCheck]);
+
+  // --- Submit ---
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!USE_API) return;
-    setError(null);
+
+    setFieldErrors({});
     setMessage(null);
     setSubmitting(true);
+
     try {
       const res = await submitProductReview(
         slug,
-        { authorName, rating, body },
+        {
+          authorName,
+          rating,
+          body,
+          contactPhone: contactPhone.trim() || undefined,
+          contactEmail: contactEmail.trim() || undefined,
+        },
         sessionId,
       );
       setMessage(res.message);
       setBody("");
-      if (res.isPublished) {
-        await loadReviews();
-      }
+      setContactPhone("");
+      setContactEmail("");
+      setEligibilityOk(false);
+      await loadReviews();
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Could not submit review. Please try again.",
-      );
+      const errs = parseStorefrontApiError(err);
+      reportStorefrontErrors(errs, { setFieldErrors });
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <section className="mt-16 border-t border-lagari-border pt-12">
+    <section id="reviews" className="mt-16 border-t border-lagari-border pt-12 scroll-mt-24">
+      {/* Header + summary */}
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="font-display text-2xl font-semibold text-lagari-primary">
@@ -98,13 +206,12 @@ export function ProductReviews({ slug }: { slug: string }) {
               </p>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-lagari-muted">
-              No published reviews yet.
-            </p>
+            <p className="mt-2 text-sm text-lagari-muted">No published reviews yet.</p>
           )}
         </div>
       </div>
 
+      {/* Rating distribution bars */}
       {summary.totalCount > 0 && (
         <div className="mt-6 max-w-sm space-y-1.5">
           {[5, 4, 3, 2, 1].map((stars) => {
@@ -129,6 +236,7 @@ export function ProductReviews({ slug }: { slug: string }) {
         </div>
       )}
 
+      {/* Review list */}
       {reviews.length > 0 ? (
         <ul className="mt-8 space-y-6">
           {reviews.map((r) => (
@@ -138,9 +246,7 @@ export function ProductReviews({ slug }: { slug: string }) {
             >
               <div className="flex flex-wrap items-center gap-2">
                 <StarRating value={r.rating} readonly size="sm" />
-                <span className="font-medium text-lagari-primary">
-                  {r.authorName}
-                </span>
+                <span className="font-medium text-lagari-primary">{r.authorName}</span>
                 {r.isVerifiedPurchase && (
                   <span className="rounded-sm border border-lagari-brass/30 bg-lagari-brass/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-lagari-brass">
                     Verified purchase
@@ -155,9 +261,7 @@ export function ProductReviews({ slug }: { slug: string }) {
                   {formatReviewDate(r.createdAt)}
                 </span>
               </div>
-              <p className="mt-3 text-sm leading-relaxed text-lagari-muted">
-                {r.body}
-              </p>
+              <p className="mt-3 text-sm leading-relaxed text-lagari-muted">{r.body}</p>
             </li>
           ))}
         </ul>
@@ -167,27 +271,100 @@ export function ProductReviews({ slug }: { slug: string }) {
         </p>
       )}
 
+      {/* Review submission form */}
       {USE_API && (
         <form onSubmit={handleSubmit} className="mt-10 max-w-lg space-y-5">
           <div>
             <h3 className="font-label text-lagari-brass-dim">Write a review</h3>
             <p className="mt-1 text-xs text-lagari-muted">
-              Reviews from verified buyers appear immediately. Others are checked
-              in admin before publishing.
+              Only verified buyers can publish reviews. Please provide the contact
+              you used when placing your order.
             </p>
           </div>
 
+          {/* Feedback banners */}
           {message && (
             <p className="rounded-sm border border-lagari-brass/30 bg-lagari-brass/10 px-3 py-2 text-sm text-lagari-brass">
               {message}
             </p>
           )}
-          {error && (
+          {fieldErrors._form && (
             <p className="rounded-sm border border-lagari-danger/40 bg-lagari-danger/10 px-3 py-2 text-sm text-lagari-danger">
-              {error}
+              {fieldErrors._form}
             </p>
           )}
 
+          {/* Contact fields — primary verification mechanism */}
+          <fieldset className="space-y-3" data-storefront-field="contact">
+            <legend className="text-xs font-medium text-lagari-muted uppercase tracking-wide">
+              Your order contact (at least one required)
+            </legend>
+
+            <p className="text-xs text-lagari-muted">
+              Please provide the phone number or email address you used when placing
+              your order. We use this to verify your purchase.
+            </p>
+
+            <div data-storefront-field="contactPhone">
+              <input
+                type="tel"
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                placeholder="Phone number (e.g. 0311-1234567)"
+                autoComplete="tel"
+                aria-describedby={fieldErrors.contactPhone ? "contactPhone-err" : undefined}
+                className={`w-full rounded-sm border bg-lagari-surface px-4 py-3 text-lagari-primary outline-none focus:border-lagari-brass ${
+                  fieldErrors.contactPhone ? "border-lagari-danger" : "border-lagari-border"
+                }`}
+              />
+              {fieldErrors.contactPhone && (
+                <FieldError message={fieldErrors.contactPhone} />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-lagari-muted">
+              <div className="flex-1 border-t border-lagari-border" />
+              <span>or</span>
+              <div className="flex-1 border-t border-lagari-border" />
+            </div>
+
+            <div data-storefront-field="contactEmail">
+              <input
+                type="email"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                placeholder="Email address"
+                autoComplete="email"
+                aria-describedby={fieldErrors.contactEmail ? "contactEmail-err" : undefined}
+                className={`w-full rounded-sm border bg-lagari-surface px-4 py-3 text-lagari-primary outline-none focus:border-lagari-brass ${
+                  fieldErrors.contactEmail ? "border-lagari-danger" : "border-lagari-border"
+                }`}
+              />
+              {fieldErrors.contactEmail && (
+                <FieldError message={fieldErrors.contactEmail} />
+              )}
+            </div>
+
+            {/* Contact-level message (e.g. no purchase found, limit reached) */}
+            {fieldErrors._contact && (
+              <p className="text-xs text-lagari-danger">{fieldErrors._contact}</p>
+            )}
+
+            {/* Live status */}
+            <div className="min-h-4">
+              {eligibilityLoading ? (
+                <p className="animate-pulse text-xs text-lagari-muted">
+                  Checking purchase history…
+                </p>
+              ) : eligibilityOk ? (
+                <p className="text-xs text-lagari-brass">
+                  ✓ Verified purchase found — you can submit this review.
+                </p>
+              ) : null}
+            </div>
+          </fieldset>
+
+          {/* Review content */}
           <input
             required
             value={authorName}

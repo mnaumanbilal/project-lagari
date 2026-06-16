@@ -17,6 +17,7 @@ import {
   notifyOrderPlaced,
   notifyOrderStatusChanged,
 } from "./notification.service";
+import { tryNormalizePkPhone, normalizeEmail } from "../utils/contact-normalize";
 
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ["confirmed", "rto", "cancelled"],
@@ -100,6 +101,7 @@ export function mapOrderDetail(order: OrderWithRelations) {
       id: item.id,
       variantId: item.variantId,
       productTitleSnapshot: item.productTitleSnapshot,
+      productSlugSnapshot: item.productSlugSnapshot,
       variantNameSnapshot: item.variantNameSnapshot,
       unitPricePkr: item.unitPricePkr,
       quantity: item.quantity,
@@ -352,19 +354,25 @@ export async function placeCodOrder(input: {
     return null;
   }
 
+  // Normalise contact before storing so review lookups always match
+  const normalizedPhone = tryNormalizePkPhone(input.phone) ?? input.phone;
+  const normalizedEmail = input.email ? (() => {
+    try { return normalizeEmail(input.email!); } catch { return input.email!; }
+  })() : undefined;
+
   return sequelize.transaction(async (t) => {
     const [customer] = await Customer.findOrCreate({
-      where: { phone: input.phone },
+      where: { phone: normalizedPhone },
       defaults: {
-        phone: input.phone,
+        phone: normalizedPhone,
         fullName: input.fullName,
-        email: input.email ?? null,
+        email: normalizedEmail ?? null,
       },
       transaction: t,
     });
 
     await customer.update(
-      { fullName: input.fullName, email: input.email ?? customer.email },
+      { fullName: input.fullName, email: normalizedEmail ?? customer.email },
       { transaction: t },
     );
 
@@ -397,11 +405,17 @@ export async function placeCodOrder(input: {
       await variant.decrement("stock", { by: line.quantity, transaction: t });
       lowStockVariantIds.push(variant.id);
 
+      const productSlug =
+        line.productSlug?.trim() ||
+        (variant as ProductVariant & { product?: Product }).product?.slug ||
+        null;
+
       await OrderItem.create(
         {
           orderId: order.id,
           variantId: variant.id,
           productTitleSnapshot: line.productTitle,
+          productSlugSnapshot: productSlug,
           variantNameSnapshot: line.variantName,
           unitPricePkr: line.unitPricePkr,
           quantity: line.quantity,

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ProductCartActions } from "@/components/storefront/ProductCartActions";
+import { ProductRatingSummary } from "@/components/storefront/ProductRatingSummary";
 import { isProductOnSale, saleDiscountPercent } from "@/lib/catalog/pricing";
 import { formatPkr } from "@/lib/format";
 import { cloudinaryPresets } from "@/lib/media/cloudinary";
@@ -106,6 +107,11 @@ export function ProductCard({ product, featured = false }: ProductCardProps) {
           <h2 className="font-display line-clamp-2 text-base font-semibold leading-snug text-lagari-primary sm:text-2xl sm:leading-tight lg:text-3xl">
             {product.title}
           </h2>
+          <ProductRatingSummary
+            summary={product.reviewSummary}
+            size="sm"
+            className="mt-1"
+          />
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             {product.fromCompareAtPricePkr != null &&
             product.fromCompareAtPricePkr > product.fromPricePkr ? (
