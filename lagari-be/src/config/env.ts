@@ -14,12 +14,16 @@ function required(name: string, fallback?: string): string {
 
 function parseDatabaseUrl(url: string) {
   const parsed = new URL(url);
+  const sslRequired =
+    parsed.hostname.includes("neon.tech") ||
+    parsed.searchParams.get("sslmode") === "require";
   return {
     host: parsed.hostname,
     port: Number(parsed.port || 5432),
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
     name: parsed.pathname.replace(/^\//, ""),
+    ssl: sslRequired,
   };
 }
 
@@ -28,6 +32,9 @@ function resolveDb() {
     return {
       ...parseDatabaseUrl(process.env.DATABASE_URL),
       logging: process.env.DB_LOGGING === "true",
+      ssl:
+        process.env.DATABASE_URL.includes("neon.tech") ||
+        process.env.DATABASE_URL.includes("sslmode=require"),
     };
   }
 
