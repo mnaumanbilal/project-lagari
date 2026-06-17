@@ -99,11 +99,25 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [createAndStoreSession]);
 
   useEffect(() => {
-    ensureSession().catch(() => {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY);
-      setSessionId(null);
-      setReady(true);
-    });
+    let cancelled = false;
+    const fallback = window.setTimeout(() => {
+      if (!cancelled) setReady(true);
+    }, 8_000);
+
+    ensureSession()
+      .catch(() => {
+        sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        setSessionId(null);
+        setReady(true);
+      })
+      .finally(() => {
+        if (!cancelled) window.clearTimeout(fallback);
+      });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallback);
+    };
   }, [ensureSession]);
 
   return (

@@ -19,12 +19,16 @@ Storefront tokens are unchanged; admin overrides CSS variables under `.admin-the
 
 ## Form errors & API mapping
 
+> Shared FE+BE standard: [`error-resilience.md`](error-resilience.md). Storefront and admin follow the **same precedence**: field → section → form → toast fallback. A failure is never silent.
+
 | Layer | Module |
 |-------|--------|
-| API body | `{ error, details?, issues? }` — `issues[].path` from Zod (BE `errorHandler.ts`) |
+| API body | `{ error, details?, issues?, code?, field? }` — `issues[].path` from Zod; `code`/`field` from `AppError` (BE `errorHandler.ts`) |
 | Client parse | `lib/api/errors.ts`, `lib/admin/field-errors.ts` |
 | Scroll | `data-admin-field="{path}"` on wrappers; `scrollToAdminField()` on submit failure |
 | Product form | `lib/admin/product-form-validation.ts` (client) + `AdminField` components |
+| Structured first | Map `code`/`field` from the payload before message-text inference (brittle) |
+| Optimistic | Roll back in `onError` (`rollbackReviewCounts`), re-sync in `onSettled` — never leave stale optimistic UI |
 
 ### Slug uniqueness
 
