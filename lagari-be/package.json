@@ -5,12 +5,12 @@
   "description": "Lagari Express API — catalog, orders, sessions",
   "main": "dist/index.js",
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "build:render": "npm install --include=dev && npm run build",
+    "render-build": "npm install --include=dev && npm run build",
     "prestart": "npm run build",
     "start": "node dist/index.js",
     "start:prod": "node dist/index.js",
@@ -26,6 +26,14 @@
   "keywords": [],
   "license": "ISC",
   "dependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.1",
+    "@types/nodemailer": "^8.0.0",
+    "@types/web-push": "^3.6.4",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.6",
@@ -39,22 +47,14 @@
     "pg": "^8.21.0",
     "pino": "^10.3.1",
     "sequelize": "^6.37.8",
+    "typescript": "^6.0.3",
     "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/multer": "^2.1.0",
-    "@types/node": "^25.9.1",
-    "@types/nodemailer": "^8.0.0",
-    "@types/web-push": "^3.6.4",
     "pino-pretty": "^13.1.3",
     "sequelize-cli": "^6.6.5",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   }
 }
