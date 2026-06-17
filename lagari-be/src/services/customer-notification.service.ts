@@ -33,6 +33,8 @@ async function loadOrderContext(
     orderNumber: order.orderNumber,
     customerName: customer?.fullName ?? "there",
     status: event === "placed" ? "placed" : event,
+    subtotalPkr: order.subtotalPkr,
+    discountPkr: order.discountPkr,
     totalPkr: order.totalPkr,
     shippingCity: order.shippingCity,
     shippingAddress: order.shippingAddress,
@@ -47,6 +49,7 @@ async function loadOrderContext(
       variant: item.variantNameSnapshot,
       productSlug: item.productSlugSnapshot,
       quantity: item.quantity,
+      unitPricePkr: item.unitPricePkr,
       lineTotalPkr: item.unitPricePkr * item.quantity,
     })),
   };

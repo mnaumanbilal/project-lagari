@@ -1,10 +1,15 @@
 import type { OrderStatus } from "../db/models";
+import {
+  buildOrderLineItemsTableHtml,
+  formatOrderLineItemsPlainText,
+} from "./email-theme";
 
 export type OrderEmailLine = {
   title: string;
   variant: string;
   productSlug: string | null;
   quantity: number;
+  unitPricePkr: number;
   lineTotalPkr: number;
 };
 
@@ -12,6 +17,8 @@ export type OrderEmailContext = {
   orderNumber: number;
   customerName: string;
   status: OrderStatus | "placed";
+  subtotalPkr: number;
+  discountPkr: number;
   totalPkr: number;
   shippingCity: string;
   shippingAddress: string;
@@ -104,56 +111,8 @@ const STATUS_COPY: Record<
   },
 };
 
-function formatPkr(amount: number): string {
-  return `PKR ${amount.toLocaleString("en-PK")}`;
-}
-
 function numStyle(extra = ""): string {
   return `font-family:${FONT};font-variant-numeric:tabular-nums;font-weight:600;color:${C.amount};${extra}`;
-}
-
-function itemTitleHtml(title: string, productSlug: string | null, siteUrl: string): string {
-  const slug = productSlug?.trim();
-  if (!slug) {
-    return title;
-  }
-  const href = `${siteUrl.replace(/\/$/, "")}/product/${slug}`;
-  return `<a href="${href}" style="color:${C.text};text-decoration:none;font-weight:500;">${title}</a>`;
-}
-
-function itemsTableHtml(
-  items: OrderEmailLine[],
-  orderTotalPkr: number,
-  siteUrl: string,
-): string {
-  const rows = items
-    .map(
-      (item) =>
-        `<tr>
-          <td style="padding:10px 0;border-bottom:1px solid ${C.border};font-family:${FONT};color:${C.text};font-size:14px;font-weight:500;">
-            ${itemTitleHtml(item.title, item.productSlug, siteUrl)}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
-          </td>
-          <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:center;${numStyle("font-size:14px;")}">×${item.quantity}</td>
-          <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:right;${numStyle("font-size:14px;")}">${formatPkr(item.lineTotalPkr)}</td>
-        </tr>`,
-    )
-    .join("");
-  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;font-family:${FONT};">
-    <thead>
-      <tr>
-        <th align="left" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Item</th>
-        <th style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Qty</th>
-        <th align="right" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Total</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-    <tfoot>
-      <tr>
-        <td colspan="2" align="right" style="padding:14px 8px 0 0;color:${C.label};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;font-family:${FONT};">Order total</td>
-        <td align="right" style="padding:14px 0 0;${numStyle("font-size:18px;")}">${formatPkr(orderTotalPkr)}</td>
-      </tr>
-    </tfoot>
-  </table>`;
 }
 
 function contactFooterHtml(ctx: OrderEmailContext): string {
@@ -185,14 +144,11 @@ export function buildCustomerOrderEmail(ctx: OrderEmailContext): {
       ? `\nReason: ${ctx.cancelReason}\n`
       : "";
 
-  const itemsText = ctx.items
-    .map((i) => {
-      const base = `• ${i.title} (${i.variant}) ×${i.quantity} — ${formatPkr(i.lineTotalPkr)}`;
-      const slug = i.productSlug?.trim();
-      if (!slug) return base;
-      return `${base}\n  ${ctx.siteUrl.replace(/\/$/, "")}/product/${slug}`;
-    })
-    .join("\n");
+  const itemsText = formatOrderLineItemsPlainText(ctx.items, {
+    subtotalPkr: ctx.subtotalPkr,
+    discountPkr: ctx.discountPkr,
+    totalPkr: ctx.totalPkr,
+  }, { siteUrl: ctx.siteUrl });
 
   const text = `Hi ${ctx.customerName},
 
@@ -205,8 +161,6 @@ Ship to: ${ctx.shippingAddress}, ${ctx.shippingCity}
 ${trackingBlock}${cancelReasonBlock}
 Items:
 ${itemsText}
-
-Order total: ${formatPkr(ctx.totalPkr)}
 
 ${contactFooterText(ctx)}
 
@@ -243,7 +197,11 @@ ${ctx.siteUrl}`;
               <p class="email-muted" style="margin:6px 0 0;font-size:14px;line-height:1.5;color:${C.textMuted};font-family:${FONT};">${ctx.shippingAddress}, ${ctx.shippingCity}</p>
               ${trackingHtml}
               ${cancelReasonHtml}
-              ${itemsTableHtml(ctx.items, ctx.totalPkr, ctx.siteUrl)}
+              ${buildOrderLineItemsTableHtml(ctx.items, {
+                subtotalPkr: ctx.subtotalPkr,
+                discountPkr: ctx.discountPkr,
+                totalPkr: ctx.totalPkr,
+              }, { siteUrl: ctx.siteUrl })}
               ${contactFooterHtml(ctx)}
               <p style="margin:24px 0 0;font-size:13px;font-family:${FONT};">
                 <a href="${ctx.siteUrl}" style="color:${C.label};font-weight:600;text-decoration:none;">lagari.pk</a>

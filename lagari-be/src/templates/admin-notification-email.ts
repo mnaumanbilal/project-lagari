@@ -2,13 +2,12 @@ import type { AdminNotificationType } from "../db/models";
 import type { AdminOrderEmailSnapshot } from "../services/admin-order-email";
 import {
   buildAdminOrderPlainText,
-  formatPkr,
   formatStatusLabel,
 } from "../services/admin-order-email";
 import { customerWhatsAppHref } from "../utils/customer-whatsapp";
-import { storefrontProductUrl } from "../utils/storefront-url";
 import {
   absoluteUrl,
+  buildOrderLineItemsTableHtml,
   C,
   emailButton,
   emailDetailRow,
@@ -50,65 +49,6 @@ function isOrderSnapshot(value: unknown): value is AdminOrderEmailSnapshot {
     typeof (value as AdminOrderEmailSnapshot).orderNumber === "number" &&
     Array.isArray((value as AdminOrderEmailSnapshot).items)
   );
-}
-
-function orderItemTitleHtml(
-  title: string,
-  productSlug: string | null,
-  storefrontSiteUrl: string,
-): string {
-  const slug = productSlug?.trim();
-  if (!slug) return title;
-  const href = storefrontProductUrl(storefrontSiteUrl, slug);
-  return `<a href="${href}" style="color:${C.text};text-decoration:none;font-weight:500;">${title}</a>`;
-}
-
-function orderItemsTableHtml(
-  order: AdminOrderEmailSnapshot,
-  storefrontSiteUrl: string,
-): string {
-  const rows = order.items
-    .map(
-      (item) =>
-        `<tr>
-          <td style="padding:10px 0;border-bottom:1px solid ${C.border};font-family:${FONT};color:${C.text};font-size:14px;font-weight:500;">
-            ${orderItemTitleHtml(item.title, item.productSlug, storefrontSiteUrl)}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
-          </td>
-          <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:center;font-family:${FONT};font-size:14px;color:${C.text};">×${item.quantity}</td>
-          <td style="padding:10px 0;border-bottom:1px solid ${C.border};text-align:right;font-family:${FONT};font-size:14px;font-weight:600;color:${C.text};">${formatPkr(item.lineTotalPkr)}</td>
-        </tr>`,
-    )
-    .join("");
-
-  const discountRow =
-    order.discountPkr > 0
-      ? `<tr>
-          <td colspan="2" align="right" style="padding:8px 8px 0 0;color:${C.textMuted};font-size:13px;font-family:${FONT};">Discount</td>
-          <td align="right" style="padding:8px 0 0;font-family:${FONT};font-size:13px;color:${C.textMuted};">−${formatPkr(order.discountPkr)}</td>
-        </tr>`
-      : "";
-
-  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px;font-family:${FONT};">
-    <thead>
-      <tr>
-        <th align="left" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Item</th>
-        <th style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Qty</th>
-        <th align="right" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Total</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-    <tfoot>
-      <tr>
-        <td colspan="2" align="right" style="padding:12px 8px 0 0;color:${C.textMuted};font-size:13px;font-family:${FONT};">Subtotal</td>
-        <td align="right" style="padding:12px 0 0;font-family:${FONT};font-size:13px;color:${C.text};">${formatPkr(order.subtotalPkr)}</td>
-      </tr>
-      ${discountRow}
-      <tr>
-        <td colspan="2" align="right" style="padding:10px 8px 0 0;color:${C.label};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;font-family:${FONT};">Order total</td>
-        <td align="right" style="padding:10px 0 0;font-family:${FONT};font-size:18px;font-weight:700;color:${C.text};">${formatPkr(order.totalPkr)}</td>
-      </tr>
-    </tfoot>
-  </table>`;
 }
 
 function orderDetailsHtml(
@@ -178,7 +118,11 @@ function orderDetailsHtml(
   </table>
   <div style="margin:20px 0 0;">
     <p style="margin:0 0 8px;font-family:${FONT};font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:${C.label};">Line items · ${order.itemCount} piece${order.itemCount === 1 ? "" : "s"}</p>
-    ${orderItemsTableHtml(order, storefrontSiteUrl)}
+    ${buildOrderLineItemsTableHtml(order.items, {
+      subtotalPkr: order.subtotalPkr,
+      discountPkr: order.discountPkr,
+      totalPkr: order.totalPkr,
+    }, { siteUrl: storefrontSiteUrl })}
   </div>`;
 }
 

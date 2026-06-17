@@ -82,3 +82,119 @@ export function absoluteUrl(baseUrl: string, path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${base}${normalized}`;
 }
+
+export function formatPkrEmail(amount: number): string {
+  return `PKR ${amount.toLocaleString("en-PK")}`;
+}
+
+/** Row for order line-item tables in customer + admin emails. */
+export type EmailOrderLineItem = {
+  title: string;
+  variant: string;
+  productSlug?: string | null;
+  quantity: number;
+  unitPricePkr: number;
+  lineTotalPkr: number;
+};
+
+export type EmailOrderLineTotals = {
+  subtotalPkr: number;
+  discountPkr: number;
+  totalPkr: number;
+};
+
+function emailLineItemTitleHtml(
+  title: string,
+  productSlug: string | null | undefined,
+  siteUrl: string | undefined,
+): string {
+  const slug = productSlug?.trim();
+  if (!slug || !siteUrl) {
+    return title;
+  }
+  const href = `${siteUrl.replace(/\/$/, "")}/product/${slug}`;
+  return `<a href="${href}" style="color:${C.text};text-decoration:none;font-weight:500;">${title}</a>`;
+}
+
+function emailNumStyle(extra = ""): string {
+  return `font-family:${FONT};font-variant-numeric:tabular-nums;font-weight:600;color:${C.text};${extra}`;
+}
+
+/**
+ * Shared line-items table: Item · unit price · qty · line total, then subtotal /
+ * discount / order total in the footer.
+ */
+export function buildOrderLineItemsTableHtml(
+  items: EmailOrderLineItem[],
+  totals: EmailOrderLineTotals,
+  options?: { siteUrl?: string },
+): string {
+  const rows = items
+    .map(
+      (item) =>
+        `<tr>
+          <td style="padding:10px 8px 10px 0;border-bottom:1px solid ${C.border};font-family:${FONT};color:${C.text};font-size:14px;font-weight:500;">
+            ${emailLineItemTitleHtml(item.title, item.productSlug, options?.siteUrl)}<br><span style="color:${C.textMuted};font-size:13px;font-weight:400;">${item.variant}</span>
+          </td>
+          <td style="padding:10px 4px;border-bottom:1px solid ${C.border};text-align:right;white-space:nowrap;${emailNumStyle("font-size:14px;font-weight:500;")}">${formatPkrEmail(item.unitPricePkr)}</td>
+          <td style="padding:10px 4px;border-bottom:1px solid ${C.border};text-align:center;${emailNumStyle("font-size:14px;font-weight:500;")}">×${item.quantity}</td>
+          <td style="padding:10px 0 10px 4px;border-bottom:1px solid ${C.border};text-align:right;white-space:nowrap;${emailNumStyle("font-size:14px;")}">${formatPkrEmail(item.lineTotalPkr)}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const discountRow =
+    totals.discountPkr > 0
+      ? `<tr>
+          <td colspan="3" align="right" style="padding:8px 8px 0 0;color:${C.textMuted};font-size:13px;font-family:${FONT};">Discount</td>
+          <td align="right" style="padding:8px 0 0;white-space:nowrap;font-family:${FONT};font-size:13px;color:${C.textMuted};">−${formatPkrEmail(totals.discountPkr)}</td>
+        </tr>`
+      : "";
+
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;font-family:${FONT};">
+    <thead>
+      <tr>
+        <th align="left" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Item</th>
+        <th align="right" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Unit</th>
+        <th style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Qty</th>
+        <th align="right" style="color:${C.label};font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;padding-bottom:10px;font-family:${FONT};">Line total</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr>
+        <td colspan="3" align="right" style="padding:12px 8px 0 0;color:${C.textMuted};font-size:13px;font-family:${FONT};">Subtotal</td>
+        <td align="right" style="padding:12px 0 0;white-space:nowrap;font-family:${FONT};font-size:13px;color:${C.text};">${formatPkrEmail(totals.subtotalPkr)}</td>
+      </tr>
+      ${discountRow}
+      <tr>
+        <td colspan="3" align="right" style="padding:10px 8px 0 0;color:${C.label};font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;font-family:${FONT};">Order total</td>
+        <td align="right" style="padding:10px 0 0;white-space:nowrap;${emailNumStyle("font-size:18px;")}">${formatPkrEmail(totals.totalPkr)}</td>
+      </tr>
+    </tfoot>
+  </table>`;
+}
+
+export function formatOrderLineItemsPlainText(
+  items: EmailOrderLineItem[],
+  totals: EmailOrderLineTotals,
+  options?: { siteUrl?: string },
+): string {
+  const lines = items.map((item) => {
+    const base = `• ${item.title} (${item.variant}) — ${formatPkrEmail(item.unitPricePkr)} × ${item.quantity} = ${formatPkrEmail(item.lineTotalPkr)}`;
+    const slug = item.productSlug?.trim();
+    if (!slug || !options?.siteUrl) return base;
+    return `${base}\n  ${options.siteUrl.replace(/\/$/, "")}/product/${slug}`;
+  });
+
+  lines.push(
+    "",
+    `Subtotal: ${formatPkrEmail(totals.subtotalPkr)}`,
+  );
+  if (totals.discountPkr > 0) {
+    lines.push(`Discount: −${formatPkrEmail(totals.discountPkr)}`);
+  }
+  lines.push(`Order total: ${formatPkrEmail(totals.totalPkr)}`);
+
+  return lines.join("\n");
+}
