@@ -70,11 +70,21 @@ Admin must confirm COD orders before ship (FR-D6).
 - Design tokens in `docs/design/lagari-visual-direction.md` before UI build.
 - Admin JWT on `/admin-panel-route/(console)/*`.
 
+## Error handling & resilience
+
+Source of truth: `docs/architecture/error-resilience.md`.
+
+- **FE precedence:** field → section (`_contact`) → form (`_form`) → toast. Never silent. HTTP `200` business warnings (eligibility `canSubmit:false`) still surface.
+- **Structured first:** API responses carry `code`/`field`; map on those before message-text inference. `AppError(status, msg, { code, field })` on BE; `errorHandler` echoes them.
+- **BE resilience:** `error-taxonomy.ts` (classify/transient), `retry.ts` (`withRetry` backoff+jitter, transient-only — never order/review/upload writes), pino `logger.ts`, `request-id.ts`. Crash guards in `index.ts` (unhandledRejection keep-serving; uncaughtException drain+exit; SIGTERM/SIGINT graceful).
+- **Optimistic mutations** roll back in `onError`, re-sync `onSettled`.
+- **Tests:** Vitest in both packages (`npm test`).
+
 ## Admin UX (handoff)
 
 - **Theme:** `.admin-theme` dark tokens in `globals.css` — inputs `#232018`, not white.
 - **Toasts:** `useAdminToast()` for success/error/warning; inline errors for forms.
-- **API errors:** `ApiError` carries `payload.issues[]` with Zod paths; map via `parseApiError` → `data-admin-field` + scroll.
+- **API errors:** `ApiError` carries `payload.issues[]` with Zod paths plus optional `code`/`field`; map via `parseApiError` → `data-admin-field` + scroll.
 - **Product slug:** unique in DB; duplicate returns **409** → error on `slug` field.
 **Reviews:** `GET /admin/reviews` returns `{ reviews, total, page, limit }`; **tabs** — `All reviews` (default, `status=all`) and `Pending` (`?status=pending`); URL-synced filters; `product` search matches slug or title (debounced 350ms); product titles link to storefront PDP + admin edit.
 

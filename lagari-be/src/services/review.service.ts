@@ -289,6 +289,23 @@ async function countExistingCustomerReviews(
 // Eligibility check (also called by the eligibility endpoint)
 // ---------------------------------------------------------------------------
 
+/**
+ * Machine-readable failure codes. The frontend maps these to the correct
+ * input/section without parsing message text. `not_found` and `no_purchase`
+ * deliberately share one code + message so the endpoint never reveals whether
+ * an account exists (non-enumeration).
+ */
+export type ReviewEligibilityFailureCode =
+  | "CONTACT_REQUIRED"
+  | "CONTACT_INVALID"
+  | "PURCHASE_NOT_VERIFIED"
+  | "REVIEW_LIMIT_REACHED"
+  | "AMBIGUOUS_EMAIL";
+
+/** Shared message for "no account" and "no purchase" — must stay identical. */
+const PURCHASE_NOT_VERIFIED_MESSAGE =
+  "We couldn't verify a purchase for this product with those contact details. Please use the phone number or email from your order.";
+
 export type ReviewEligibilityResult =
   | { canSubmit: true; purchaseUnits: number; remainingReviews: number }
   | {
@@ -300,6 +317,10 @@ export type ReviewEligibilityResult =
         | "no_purchase"
         | "limit_reached"
         | "ambiguous_email";
+      /** Machine-readable code — preferred by the frontend over message text. */
+      code: ReviewEligibilityFailureCode;
+      /** Which input/section the message belongs under. */
+      field: "phone" | "email" | "contact";
       message: string;
     };
 
@@ -322,6 +343,8 @@ export async function checkReviewEligibility(
       return {
         canSubmit: false,
         reason: "contact_invalid",
+        code: "CONTACT_INVALID",
+        field: err.field,
         message: err.message,
       };
     }
@@ -337,6 +360,8 @@ export async function checkReviewEligibility(
       return {
         canSubmit: false,
         reason: "ambiguous_email",
+        code: "AMBIGUOUS_EMAIL",
+        field: "email",
         message: err.message,
       };
     }
@@ -347,8 +372,9 @@ export async function checkReviewEligibility(
     return {
       canSubmit: false,
       reason: "not_found",
-      message:
-        "We couldn't find an account with those contact details. Please use the phone number or email from your order.",
+      code: "PURCHASE_NOT_VERIFIED",
+      field: "contact",
+      message: PURCHASE_NOT_VERIFIED_MESSAGE,
     };
   }
 
@@ -358,8 +384,9 @@ export async function checkReviewEligibility(
     return {
       canSubmit: false,
       reason: "no_purchase",
-      message:
-        "We couldn't verify a purchase for this product with those contact details. Please use the contact information from your order.",
+      code: "PURCHASE_NOT_VERIFIED",
+      field: "contact",
+      message: PURCHASE_NOT_VERIFIED_MESSAGE,
     };
   }
 
@@ -371,6 +398,8 @@ export async function checkReviewEligibility(
     return {
       canSubmit: false,
       reason: "limit_reached",
+      code: "REVIEW_LIMIT_REACHED",
+      field: "contact",
       message: `You've already reviewed this product for each purchase on your account (${existingReviews} of ${purchaseUnits}).`,
     };
   }
@@ -422,7 +451,10 @@ export async function submitCustomerReview(
   if (!eligibility.canSubmit) {
     const statusCode =
       eligibility.reason === "limit_reached" ? 409 : 422;
-    throw new AppError(statusCode, eligibility.message);
+    throw new AppError(statusCode, eligibility.message, {
+      code: eligibility.code,
+      field: eligibility.field,
+    });
   }
 
   // Resolve customer once more (already validated above, so safe)
@@ -872,7 +904,7 @@ export async function getLinkedOrderForReview(
             oi.variant_name_snapshot,
             oi.quantity,
             oi.unit_price_pkr,
-            oi.line_total_pkr
+            (oi.unit_price_pkr * oi.quantity)::int AS line_total_pkr
      FROM order_items oi
      WHERE oi.order_id = :orderId
      ORDER BY oi.created_at ASC`,

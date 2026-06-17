@@ -5,6 +5,10 @@ export type ApiErrorPayload = {
   error?: string;
   details?: Record<string, string[] | unknown>;
   issues?: ApiIssue[];
+  /** Machine-readable error code, e.g. "REVIEW_LIMIT_REACHED". */
+  code?: string;
+  /** Form field or section the message belongs under, e.g. "contact". */
+  field?: string;
 };
 
 export function issuesToFieldErrors(issues: ApiIssue[]): Record<string, string> {

@@ -21,6 +21,13 @@ export type ProductReviewsResponse = {
   summary: ReviewSummary;
 };
 
+export type ReviewEligibilityFailureCode =
+  | "CONTACT_REQUIRED"
+  | "CONTACT_INVALID"
+  | "PURCHASE_NOT_VERIFIED"
+  | "REVIEW_LIMIT_REACHED"
+  | "AMBIGUOUS_EMAIL";
+
 export type ReviewEligibilityResult =
   | { canSubmit: true; purchaseUnits: number; remainingReviews: number }
   | {
@@ -32,6 +39,10 @@ export type ReviewEligibilityResult =
         | "no_purchase"
         | "limit_reached"
         | "ambiguous_email";
+      /** Machine-readable code — preferred over message text for mapping. */
+      code?: ReviewEligibilityFailureCode;
+      /** Input/section the message belongs under. */
+      field?: "phone" | "email" | "contact";
       message: string;
     };
 
@@ -57,6 +68,7 @@ export async function fetchProductReviews(
 export async function fetchReviewEligibility(
   slug: string,
   contact: { contactPhone?: string; contactEmail?: string },
+  options?: { signal?: AbortSignal },
 ): Promise<ReviewEligibilityResult> {
   const params = new URLSearchParams();
   if (contact.contactPhone) params.set("contactPhone", contact.contactPhone);
@@ -64,7 +76,7 @@ export async function fetchReviewEligibility(
 
   return apiFetch<ReviewEligibilityResult>(
     `/catalog/products/${slug}/reviews/eligibility?${params.toString()}`,
-    { cache: "no-store" },
+    { cache: "no-store", signal: options?.signal },
   );
 }
 

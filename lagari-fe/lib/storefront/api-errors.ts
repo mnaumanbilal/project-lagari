@@ -37,18 +37,54 @@ function inferFieldFromMessage(message: string): string | null {
   return null;
 }
 
-/** Parse HTTP error responses (4xx/5xx) into field-level errors where possible. */
+/** Map a structured `field` value from the API to a storefront form key. */
+function fieldToKey(field: string | undefined): string | null {
+  switch (field) {
+    case "phone":
+      return "contactPhone";
+    case "email":
+      return "contactEmail";
+    case "contact":
+      return "_contact";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Parse HTTP error responses into field-level errors.
+ *
+ * Precedence: structured `field` from the API → Zod validation payload →
+ * message-text inference (last resort) → form-level fallback. Network/unknown
+ * errors and 5xx always fall back to a safe, generic form-level message.
+ */
 export function parseStorefrontApiError(err: unknown): StorefrontFieldErrors {
   if (!(err instanceof ApiError)) {
-    return { _form: "Something went wrong. Please try again." };
+    // Network failure, JSON parse error, or anything non-HTTP.
+    return { _form: "Something went wrong. Please check your connection and try again." };
   }
 
+  // 1. Prefer the structured field the backend told us about.
+  const structuredKey = fieldToKey(err.payload?.field);
+  if (structuredKey) return { [structuredKey]: err.message };
+
+  // 2. Zod / validation issues mapped to known fields.
   const fromPayload = mapApiFieldKeys(parseValidationPayload(err.payload ?? {}));
   if (Object.keys(fromPayload).length > 0) return fromPayload;
 
+  // 3. Rate limiting — never a field error.
+  if (err.status === 429) {
+    return { _form: err.message || "You're doing that too fast. Please wait a moment and try again." };
+  }
+
+  // 4. Last-resort message inference (kept narrow to avoid mis-targeting).
   const inferred = inferFieldFromMessage(err.message);
   if (inferred) return { [inferred]: err.message };
 
+  // 5. Generic fallback. 5xx must never expose internals.
+  if (err.status >= 500) {
+    return { _form: "Something went wrong on our end. Please try again in a moment." };
+  }
   return { _form: err.message || "Something went wrong. Please try again." };
 }
 
@@ -56,10 +92,11 @@ export function parseStorefrontApiError(err: unknown): StorefrontFieldErrors {
 export function eligibilityToFieldErrors(
   result: Extract<ReviewEligibilityResult, { canSubmit: false }>,
 ): StorefrontFieldErrors {
-  if (result.field === "phone") return { contactPhone: result.message };
-  if (result.field === "email") return { contactEmail: result.message };
-  if (result.field === "contact") return { _contact: result.message };
+  // Prefer the structured field from the backend.
+  const structuredKey = fieldToKey(result.field);
+  if (structuredKey) return { [structuredKey]: result.message };
 
+  // Fallback for older backends that don't send `field`.
   switch (result.reason) {
     case "contact_invalid":
     case "contact_required": {
@@ -71,9 +108,8 @@ export function eligibilityToFieldErrors(
       return { contactEmail: result.message };
     case "not_found":
     case "no_purchase":
-      return { _contact: result.message };
     case "limit_reached":
-      return { _form: result.message };
+      return { _contact: result.message };
     default:
       return { _form: result.message };
   }

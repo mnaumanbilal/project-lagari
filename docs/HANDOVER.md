@@ -58,6 +58,8 @@ project-lagari/
 | Media | Cloudinary REST API |
 | Notifications | SMS (Twilio), Slack webhook, SSE (admin feed) |
 | Real-time | Server-Sent Events (`/admin/notifications/stream`) |
+| Logging | pino (pretty in dev, JSON in prod) with `X-Request-Id` correlation |
+| Testing | Vitest (`npm test`) |
 
 ### Frontend — `lagari-fe/`
 
@@ -201,20 +203,30 @@ utils/           Shared helpers
 
 ### Error handling
 
+> Full standard: [`docs/architecture/error-resilience.md`](architecture/error-resilience.md). Read it before touching any form, API error path, or external/dependency call.
+
 All controller functions are wrapped with `catchAsync` — any thrown error propagates to `errorHandler`:
 
 ```
 ZodError → 400 { error, details, issues }
-AppError → statusCode { error: message }
-Unhandled → 500 { error: "Internal server error" }
+AppError → statusCode { error: message, code?, field? }
+Unhandled → 500 { error: "Internal server error" }   (details logged, never returned)
 ```
 
-Use `throw new AppError(statusCode, message)` for all intentional API errors.
+Use `throw new AppError(statusCode, message, { code, field })` for intentional API errors. `code` is machine-readable (e.g. `REVIEW_LIMIT_REACHED`); `field` tells the client which input/section the message belongs under (e.g. `"contact"`). Both are optional and additive.
+
+**Resilience utilities (`lagari-be/src/utils/`):**
+- `error-taxonomy.ts` — `classifyError` / `isTransientError` (validation · business · transient · internal).
+- `retry.ts` — `withRetry(fn, opts)`: bounded backoff + jitter; retries transient failures only. Applied at infra boundaries (Slack, email). **Never** on order/review creation or Cloudinary upload (non-idempotent).
+- `logger.ts` — shared **pino** logger (pretty in dev, JSON in prod/test).
+- `middleware/request-id.ts` — `X-Request-Id` correlation id on every request + error log.
+
+**Crash guards (`index.ts`):** `unhandledRejection` logs and keeps serving; `uncaughtException` drains (closes HTTP server + DB pool, 10s timeout) then exits; `SIGTERM`/`SIGINT` shut down gracefully.
 
 **Review-specific HTTP codes:**
 - `404` — product not found
-- `409` — review quota reached (purchased N times, already N reviews)
-- `422` — purchase could not be verified (no customer, no purchase, ambiguous email)
+- `409` — review quota reached (`code: REVIEW_LIMIT_REACHED`, `field: contact`)
+- `422` — purchase could not be verified (`code: PURCHASE_NOT_VERIFIED`/`CONTACT_INVALID`/`AMBIGUOUS_EMAIL`)
 - `429` — IP rate limit exceeded (5 per minute)
 
 ### Contact normalisation (`utils/contact-normalize.ts`)
@@ -290,11 +302,17 @@ Prevents hammering the API while the user types.
 
 ### Error handling
 
+> Full standard: [`docs/architecture/error-resilience.md`](architecture/error-resilience.md).
+
 - `ErrorBoundary` component wraps both storefront and admin provider trees.
 - `error.tsx` at `(storefront)` and `admin-panel-route/(console)` for route-level errors.
 - `global-error.tsx` at the app root catches top-level crashes.
 - `RouteErrorFallback` provides a consistent fallback UI with a "Try again" button.
-- All mutation hooks (`use-admin-mutations.ts`) log errors and surface them via `useAdminToast`.
+- **Display precedence:** field → section (`_contact`) → form (`_form`) → toast fallback. A failure is never silent.
+- **Structured mapping:** parse `code`/`field` from the API first; message-text inference is last resort. Helpers: `parseStorefrontApiError` / `eligibilityToFieldErrors` (storefront), `parseApiError` (admin).
+- **Business warnings (HTTP 200)** like review eligibility `canSubmit: false` are mapped to a visible channel — a 200 is not "success".
+- **429 / network / 5xx** → toast + safe generic message; never expose internals.
+- **Optimistic updates** (`use-admin-mutations.ts`) roll back in `onError` (`rollbackReviewCounts`), then re-sync in `onSettled`.
 
 ### Optimistic updates
 
@@ -364,7 +382,16 @@ This keeps the tab counts and stats cards responsive without waiting for round-t
 - Fixed `<div>` inside `<p>` HTML violation (`StarRating` → `span`).
 - SSE reconnection capped + token validity check before reconnect.
 
-### Sprint 4 — Review verification system *(current)*
+### Sprint 7 — Error handling & resilience *(current)*
+- **Root cause fix:** review eligibility now returns structured `code` + `field`; FE `eligibilityToFieldErrors` / `parseStorefrontApiError` map on these. `limit_reached` and submit `409`/`422` now show under the contact section (previously fell to a silent form banner).
+- **FE contract:** documented field → section → form → toast precedence; toast wired into `ProductReviews` submit; debounce race guard (sequence ref) prevents stale eligibility overwrites; 429 + network mapped to friendly messages.
+- **Admin optimistic rollback:** review publish/delete/bulk mutations roll back cache in `onError` (`rollbackReviewCounts`).
+- **BE resilience:** `error-taxonomy.ts`, `retry.ts` (backoff + jitter, transient-only), pino `logger.ts`, `request-id.ts` middleware; `AppError` carries optional `code`/`field`; retries applied to Slack + email only (idempotency-safe).
+- **Crash prevention:** `unhandledRejection` (log + keep serving), `uncaughtException` (drain + exit), `SIGTERM`/`SIGINT` graceful shutdown.
+- **Tests:** Vitest added to both packages — taxonomy, retry, errorHandler envelope (BE); eligibility + API error mapping (FE).
+- **Docs:** new [`error-resilience.md`](architecture/error-resilience.md) source of truth.
+
+### Sprint 4 — Review verification system
 - **Contact normalisation** (`utils/contact-normalize.ts`) — PK phone + email, with `ContactValidationError`.
 - **Migration** `20260618120000-review-customer-verification.js` — adds `customer_id`, contact snapshots to `product_reviews`; drops session unique index; adds customer+product index; backfills customer IDs from order sessions.
 - **Model update** — `ProductReview` gains `customerId`, `contactPhoneNormalized`, `contactEmailNormalized`; `Customer ↔ ProductReview` association added.
@@ -478,4 +505,4 @@ npm run dev                   # Next.js on port 3000
 
 ---
 
-*Last updated: 2026-06-16 — Sprint 4 (Review verification) complete.*
+*Last updated: 2026-06-17 — Sprint 7 (Error handling & resilience) complete.*

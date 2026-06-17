@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ProductCartActions } from "@/components/storefront/ProductCartActions";
 import { QuantityStepper } from "@/components/storefront/QuantityStepper";
 import { trackVariantSelect } from "@/lib/analytics/event-buffer";
+import { saleDiscountPercent } from "@/lib/catalog/pricing";
 import { getMaxStock, isVariantPurchasable } from "@/lib/cart/helpers";
 import { formatPkr } from "@/lib/format";
 import type { CatalogProduct } from "@/lib/types/catalog";
@@ -19,6 +20,10 @@ export function ProductPurchase({ product }: ProductPurchaseProps) {
 
   const variant = variants.find((v) => v.id === variantId);
   const maxStock = variant ? getMaxStock(variant) : 1;
+  const discountPct =
+    variant?.compareAtPricePkr != null && variant.compareAtPricePkr > variant.pricePkr
+      ? saleDiscountPercent(variant.pricePkr, variant.compareAtPricePkr)
+      : 0;
 
   return (
     <div className="mt-8 space-y-6">
@@ -54,12 +59,16 @@ export function ProductPurchase({ product }: ProductPurchaseProps) {
           <p className="font-display text-3xl font-semibold text-lagari-primary">
             {formatPkr(variant.pricePkr)}
           </p>
-          {variant.compareAtPricePkr != null &&
-            variant.compareAtPricePkr > variant.pricePkr && (
+          {discountPct > 0 && variant.compareAtPricePkr != null && (
+            <>
               <p className="text-lg text-lagari-muted line-through">
                 {formatPkr(variant.compareAtPricePkr)}
               </p>
-            )}
+              <span style={{transform: 'translateY(-2px)'}} className="rounded-sm border border-lagari-brass/40 bg-lagari-brass/10 px-2.5 py-0.5 font-label text-xs font-medium uppercase tracking-wide text-lagari-brass">
+                {discountPct}% off
+              </span>
+            </>
+          )}
         </div>
       )}
 

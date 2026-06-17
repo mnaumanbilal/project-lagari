@@ -12,6 +12,7 @@ import {
   type ReviewSummary,
 } from "@/lib/api/reviews";
 import { useSession } from "@/lib/session/session-context";
+import { useStorefrontToast } from "@/lib/storefront/toast-context";
 import {
   eligibilityToFieldErrors,
   parseStorefrontApiError,
@@ -21,6 +22,15 @@ import {
 
 /** How long to wait after the user stops typing before checking eligibility (ms). */
 const ELIGIBILITY_DEBOUNCE_MS = 700;
+
+/** Minimum contact input before hitting the eligibility API (avoids spam while typing). */
+function hasEnoughContactForCheck(phone: string, email: string): boolean {
+  const p = phone.replace(/\D/g, "");
+  const e = email.trim();
+  if (e.includes("@") && e.length >= 5) return true;
+  if (p.length >= 10) return true;
+  return false;
+}
 
 function formatReviewDate(iso: string) {
   try {
@@ -35,7 +45,11 @@ function formatReviewDate(iso: string) {
 
 function FieldError({ message }: { message: string | undefined }) {
   if (!message) return null;
-  return <p className="mt-1 text-xs text-lagari-danger">{message}</p>;
+  return (
+    <p role="alert" className="mt-1 text-xs text-lagari-danger">
+      {message}
+    </p>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -43,6 +57,7 @@ function FieldError({ message }: { message: string | undefined }) {
 // ---------------------------------------------------------------------------
 export function ProductReviews({ slug }: { slug: string }) {
   const { sessionId } = useSession();
+  const toast = useStorefrontToast();
 
   // --- Loaded reviews ---
   const [reviews, setReviews] = useState<ProductReview[]>([]);
@@ -60,6 +75,11 @@ export function ProductReviews({ slug }: { slug: string }) {
   const [eligibilityOk, setEligibilityOk] = useState(false);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
   const eligibilityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Monotonic id so a slow/stale eligibility response can't overwrite a newer one.
+  const eligibilitySeq = useRef(0);
+  const eligibilityAbort = useRef<AbortController | null>(null);
+  /** Only check eligibility after the user edits contact — never on mount/autofill alone. */
+  const contactEdited = useRef(false);
 
   // --- Submission state ---
   const [message, setMessage] = useState<string | null>(null);
@@ -82,15 +102,18 @@ export function ProductReviews({ slug }: { slug: string }) {
     void loadReviews();
   }, [loadReviews]);
 
-  // --- Debounced eligibility check ---
+  // --- Debounced eligibility check (user-driven only — no mount effect) ---
   const triggerEligibilityCheck = useCallback(
     (phone: string, email: string) => {
       if (!USE_API) return;
 
       if (eligibilityTimer.current) clearTimeout(eligibilityTimer.current);
+      eligibilityAbort.current?.abort();
+      eligibilityAbort.current = null;
 
       if (!phone.trim() && !email.trim()) {
         setEligibilityOk(false);
+        setEligibilityLoading(false);
         setFieldErrors((prev) => {
           const next = { ...prev };
           delete next.contactPhone;
@@ -101,13 +124,29 @@ export function ProductReviews({ slug }: { slug: string }) {
         return;
       }
 
+      if (!contactEdited.current || !hasEnoughContactForCheck(phone, email)) {
+        setEligibilityOk(false);
+        setEligibilityLoading(false);
+        return;
+      }
+
+      const seq = ++eligibilitySeq.current;
       eligibilityTimer.current = setTimeout(async () => {
+        const controller = new AbortController();
+        eligibilityAbort.current = controller;
         setEligibilityLoading(true);
         try {
-          const result = await fetchReviewEligibility(slug, {
-            contactPhone: phone.trim() || undefined,
-            contactEmail: email.trim() || undefined,
-          });
+          const result = await fetchReviewEligibility(
+            slug,
+            {
+              contactPhone: phone.trim() || undefined,
+              contactEmail: email.trim() || undefined,
+            },
+            { signal: controller.signal },
+          );
+
+          // Ignore if a newer check started while this one was in flight.
+          if (seq !== eligibilitySeq.current) return;
 
           if (result.canSubmit) {
             setEligibilityOk(true);
@@ -131,25 +170,31 @@ export function ProductReviews({ slug }: { slug: string }) {
               setFieldErrors((prev) => ({ ...prev, ...errs }));
             }
           }
-        } catch {
-          // Non-critical — silently ignore network errors during live check
-          setEligibilityOk(false);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          // Non-critical — silently ignore network errors during the live
+          // check. Never show a false green tick on failure.
+          if (seq === eligibilitySeq.current) setEligibilityOk(false);
         } finally {
-          setEligibilityLoading(false);
+          if (seq === eligibilitySeq.current) setEligibilityLoading(false);
         }
       }, ELIGIBILITY_DEBOUNCE_MS);
     },
     [slug],
   );
 
-  // Re-run eligibility whenever contact fields change
+  function handleContactChange(phone: string, email: string) {
+    contactEdited.current = true;
+    triggerEligibilityCheck(phone, email);
+  }
+
+  // Cancel pending eligibility work on unmount.
   useEffect(() => {
-    triggerEligibilityCheck(contactPhone, contactEmail);
-    // Cancel timer on unmount
     return () => {
       if (eligibilityTimer.current) clearTimeout(eligibilityTimer.current);
+      eligibilityAbort.current?.abort();
     };
-  }, [contactPhone, contactEmail, triggerEligibilityCheck]);
+  }, []);
 
   // --- Submit ---
   async function handleSubmit(e: React.FormEvent) {
@@ -177,10 +222,11 @@ export function ProductReviews({ slug }: { slug: string }) {
       setContactPhone("");
       setContactEmail("");
       setEligibilityOk(false);
+      toast.success("Your review has been submitted.");
       await loadReviews();
     } catch (err) {
       const errs = parseStorefrontApiError(err);
-      reportStorefrontErrors(errs, { setFieldErrors });
+      reportStorefrontErrors(errs, { setFieldErrors, toast });
     } finally {
       setSubmitting(false);
     }
@@ -295,7 +341,11 @@ export function ProductReviews({ slug }: { slug: string }) {
           )}
 
           {/* Contact fields — primary verification mechanism */}
-          <fieldset className="space-y-3" data-storefront-field="contact">
+          <fieldset
+            className="space-y-3"
+            data-storefront-field="contact"
+            aria-invalid={Boolean(fieldErrors._contact) || undefined}
+          >
             <legend className="text-xs font-medium text-lagari-muted uppercase tracking-wide">
               Your order contact (at least one required)
             </legend>
@@ -309,7 +359,12 @@ export function ProductReviews({ slug }: { slug: string }) {
               <input
                 type="tel"
                 value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setContactPhone(next);
+                  handleContactChange(next, contactEmail);
+                }}
+                onBlur={() => handleContactChange(contactPhone, contactEmail)}
                 placeholder="Phone number (e.g. 0311-1234567)"
                 autoComplete="tel"
                 aria-describedby={fieldErrors.contactPhone ? "contactPhone-err" : undefined}
@@ -332,7 +387,12 @@ export function ProductReviews({ slug }: { slug: string }) {
               <input
                 type="email"
                 value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setContactEmail(next);
+                  handleContactChange(contactPhone, next);
+                }}
+                onBlur={() => handleContactChange(contactPhone, contactEmail)}
                 placeholder="Email address"
                 autoComplete="email"
                 aria-describedby={fieldErrors.contactEmail ? "contactEmail-err" : undefined}
@@ -347,7 +407,9 @@ export function ProductReviews({ slug }: { slug: string }) {
 
             {/* Contact-level message (e.g. no purchase found, limit reached) */}
             {fieldErrors._contact && (
-              <p className="text-xs text-lagari-danger">{fieldErrors._contact}</p>
+              <p role="alert" className="text-xs text-lagari-danger">
+                {fieldErrors._contact}
+              </p>
             )}
 
             {/* Live status */}
