@@ -49,6 +49,11 @@
 
 ## Resilience
 
+- **Read `docs/architecture/error-resilience.md` before touching any form, API error path, or external/dependency call.** It is the source of truth for FE error display + BE retry/crash policy.
+- **FE error precedence:** field → section (`_contact`) → form (`_form`) → toast. A failure is never silent. Business warnings returned as HTTP `200` (e.g. eligibility `canSubmit:false`) must still surface visibly.
+- **Map `code`/`field` from the API first**; message-text inference is last resort. Helpers: `parseStorefrontApiError` / `eligibilityToFieldErrors` (storefront), `parseApiError` (admin).
+- **BE:** `throw new AppError(status, msg, { code, field })`; wrap external/infra calls with `withRetry` (transient only — never order/review/upload writes); log via pino with `requestId`.
+- **Optimistic mutations** roll back in `onError`, re-sync in `onSettled`.
 - **ErrorBoundary** wraps storefront + admin providers (`components/errors/ErrorBoundary.tsx`).
 - Route **`error.tsx`** on storefront and admin console; **`global-error.tsx`** at app root.
 - Debounced URL commits: `lib/hooks/use-debounced-commit.ts` (ref-stable callback, no infinite loops).

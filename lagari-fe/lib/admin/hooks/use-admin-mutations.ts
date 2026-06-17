@@ -25,11 +25,24 @@ import {
   findAdminReviewInCache,
   patchReviewCountsInCache,
   refetchReviewStats,
+  type ReviewCountDelta,
 } from "@/lib/admin/review-cache-updates";
 import { useAdminToken } from "@/lib/admin/hooks/use-admin-token";
 
 function invalidateAfterReviewChange(queryClient: QueryClient) {
   void refetchReviewStats(queryClient);
+}
+
+/** Reverse an optimistic count delta so a failed mutation rolls back instantly. */
+function rollbackReviewCounts(
+  queryClient: QueryClient,
+  context: { delta: ReviewCountDelta } | undefined,
+) {
+  if (!context) return;
+  patchReviewCountsInCache(queryClient, {
+    pending: -context.delta.pending,
+    published: -context.delta.published,
+  });
 }
 
 export function useInvalidateAdminOrders() {
@@ -160,6 +173,10 @@ export function usePatchAdminReview() {
         ? deltaForPublishToggle(review.isPublished, isPublished)
         : deltaForPublishToggle(!isPublished, isPublished);
       patchReviewCountsInCache(queryClient, delta);
+      return { delta };
+    },
+    onError: (_err, _vars, context) => {
+      rollbackReviewCounts(queryClient, context);
     },
     onSettled: () => {
       invalidateAfterReviewChange(queryClient);
@@ -175,7 +192,13 @@ export function useDeleteAdminReview() {
     mutationFn: (id: string) => deleteAdminReview(token!, id),
     onMutate: (id) => {
       const review = findAdminReviewInCache(queryClient, id);
-      if (review) patchReviewCountsInCache(queryClient, deltaForDelete(review));
+      if (!review) return { delta: { pending: 0, published: 0 } };
+      const delta = deltaForDelete(review);
+      patchReviewCountsInCache(queryClient, delta);
+      return { delta };
+    },
+    onError: (_err, _vars, context) => {
+      rollbackReviewCounts(queryClient, context);
     },
     onSettled: () => {
       invalidateAfterReviewChange(queryClient);
@@ -199,7 +222,12 @@ export function useBulkDeleteAdminReviews() {
         pending += d.pending;
         published += d.published;
       }
-      patchReviewCountsInCache(queryClient, { pending, published });
+      const delta = { pending, published };
+      patchReviewCountsInCache(queryClient, delta);
+      return { delta };
+    },
+    onError: (_err, _vars, context) => {
+      rollbackReviewCounts(queryClient, context);
     },
     onSettled: () => {
       invalidateAfterReviewChange(queryClient);
@@ -234,7 +262,12 @@ export function useBulkPatchAdminReviews() {
           published += d.published;
         }
       }
-      patchReviewCountsInCache(queryClient, { pending, published });
+      const delta = { pending, published };
+      patchReviewCountsInCache(queryClient, delta);
+      return { delta };
+    },
+    onError: (_err, _vars, context) => {
+      rollbackReviewCounts(queryClient, context);
     },
     onSettled: () => {
       invalidateAfterReviewChange(queryClient);

@@ -32,7 +32,8 @@ export function ProductCartActions({
   const defaultVariant = getDefaultVariant(product);
   const variantId = variantIdProp ?? defaultVariant?.id;
   const variant = product.variants?.find((v) => v.id === variantId);
-  const canInteract = cartReady && sessionReady;
+  // Session must be ready; cart prefetch is best-effort (addItem ensures session).
+  const canInteract = sessionReady && cartReady;
   const purchasable = variant && isVariantPurchasable(variant);
   const multiVariant = (product.variants?.length ?? 0) > 1 && !variantIdProp;
 

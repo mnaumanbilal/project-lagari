@@ -15,7 +15,8 @@
 - [x] Perfume notes (top/heart/base) on admin product form
 - [x] Line items link to storefront PDP (admin, emails, cart)
 - [x] `cancelled` order status + transitions from pending/confirmed
-- [x] `npm run build` passes in `lagari-fe` and `lagari-be`
+- [x] **Error handling & resilience:** structured `code`/`field` API contract; FE field/section/form/toast precedence (never silent); BE error taxonomy + `withRetry` (transient-only) + pino logging + `requestId` + crash guards/graceful shutdown; Vitest suites
+- [x] `npm run build` passes in `lagari-fe` and `lagari-be`; `npm test` passes in both
 
 ## What's left
 
@@ -43,6 +44,7 @@
 
 | Date | Work |
 |------|------|
+| 2026-06-17 | Sprint 7: Error handling & resilience — structured `code`/`field` eligibility + error contract; FE field/section/form/toast precedence; review submit toast + debounce race guard; 429/network mapping; admin optimistic rollback; BE error-taxonomy + `withRetry` + pino + request-id + crash guards; Vitest in both packages; `docs/architecture/error-resilience.md` |
 | 2026-06-16 | Sprint 6: Admin review linked-order panel (expand/collapse, items table, Go to order); storefront field-level eligibility error reporting |
 | 2026-06-16 | Sprint 5: Storefront toast system; field-mapped API errors (`api-errors.ts`); eligibility 200-OK failures now show under the relevant input |
 | 2026-06-16 | Sprint 4: Robust review verification — contact normalization, migration, eligibility service+endpoint, PDP form, admin contact chips, handover doc |

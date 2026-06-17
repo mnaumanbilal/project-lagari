@@ -89,7 +89,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!USE_API || !sessionId) return;
+    if (!USE_API) return;
+    if (!sessionId) {
+      // Prefetch is optional — don't block add-to-bag while session initialises.
+      setCartReady(true);
+      return;
+    }
 
     let cancelled = false;
     runCartOp((id) => cartApi.fetchCart(id))

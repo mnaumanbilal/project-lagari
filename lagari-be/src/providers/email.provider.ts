@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import { env, isEmailConfigured } from "../config/env";
+import { withRetry } from "../utils/retry";
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -27,13 +28,17 @@ export async function sendAdminEmail(input: {
   const transport = getTransporter();
   if (!transport) return;
 
-  await transport.sendMail({
-    from: env.email.from,
-    to: env.email.adminTo,
-    subject: input.subject,
-    text: input.text,
-    html: input.html,
-  });
+  await withRetry(
+    () =>
+      transport.sendMail({
+        from: env.email.from,
+        to: env.email.adminTo,
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+      }),
+    { label: "email.admin" },
+  );
 }
 
 export async function sendCustomerEmail(input: {
@@ -48,11 +53,15 @@ export async function sendCustomerEmail(input: {
   const to = input.to.trim();
   if (!to) return;
 
-  await transport.sendMail({
-    from: env.email.from,
-    to,
-    subject: input.subject,
-    text: input.text,
-    html: input.html,
-  });
+  await withRetry(
+    () =>
+      transport.sendMail({
+        from: env.email.from,
+        to,
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+      }),
+    { label: "email.customer" },
+  );
 }
