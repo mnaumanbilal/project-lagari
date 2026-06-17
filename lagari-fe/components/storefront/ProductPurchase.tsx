@@ -68,7 +68,7 @@ export function ProductPurchase({ product }: ProductPurchaseProps) {
           <p className="font-label mb-3 text-lagari-brass-dim">Quantity</p>
           <QuantityStepper
             value={quantity}
-            min={1}
+            min={1} 
             max={maxStock}
             onChange={setQuantity}
           />
