@@ -13,8 +13,8 @@ services:
     buildCommand: npm run build
     startCommand: node dist/index.js
     healthCheckPath: /health
-    # NODE_ENV=production is set automatically at runtime by Render.
-    # Do not set it here — it skips devDependencies during install and breaks tsc.
-      # Set the rest in Render Dashboard → Environment (secrets):
-      # DATABASE_URL, REDIS_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET,
-      # CORS_ORIGIN, DOMAIN, PUBLIC_SITE_URL, SMTP_*, CLOUDINARY_*, etc.
+    # Set secrets in Render Dashboard → Environment:
+    # DATABASE_URL, REDIS_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET,
+    # CORS_ORIGIN, DOMAIN, PUBLIC_SITE_URL, SMTP_*, CLOUDINARY_*, etc.
+    # Do NOT set NODE_ENV=production as a manual env var before first deploy —
+    # it can skip packages during install. Render sets production at runtime.
