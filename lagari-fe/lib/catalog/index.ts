@@ -23,32 +23,11 @@ export { CATEGORY_LABELS };
 export type { CatalogProduct, CategoryOption, NoteTagOption };
 export type { NoteTag, ProductCategory } from "@/lib/data/dummy-products";
 
-export async function listCategories(): Promise<CategoryOption[]> {
-  if (USE_API) {
-    return fetchCategories();
-  }
-  return Object.entries(CATEGORY_LABELS).map(([slug, name]) => ({
-    slug,
-    name,
-  }));
-}
-
-export async function listNoteTags(): Promise<NoteTagOption[]> {
-  if (USE_API) {
-    return fetchNoteTags();
-  }
-  return DUMMY_NOTE_TAGS.map(({ slug, name }) => ({ slug, name }));
-}
-
-export async function listProducts(filters?: {
+function dummyCatalogProducts(filters?: {
   category?: string;
   note?: string;
   q?: string;
-}): Promise<CatalogProduct[]> {
-  if (USE_API) {
-    const { items } = await fetchProducts(filters);
-    return items;
-  }
+}): CatalogProduct[] {
   return dummyList(filters).map((p) => ({
     ...p,
     designerInspiration: p.designerInspiration,
@@ -62,12 +41,7 @@ export async function listProducts(filters?: {
   }));
 }
 
-export async function getProductBySlug(
-  slug: string,
-): Promise<CatalogProduct | null> {
-  if (USE_API) {
-    return fetchProductBySlug(slug);
-  }
+function dummyProductBySlug(slug: string): CatalogProduct | null {
   const p = dummyGetBySlug(slug);
   if (!p) return null;
   return {
@@ -76,10 +50,69 @@ export async function getProductBySlug(
   };
 }
 
+export async function listCategories(): Promise<CategoryOption[]> {
+  if (USE_API) {
+    try {
+      return await fetchCategories();
+    } catch {
+      /* fall through to dummy */
+    }
+  }
+  return Object.entries(CATEGORY_LABELS).map(([slug, name]) => ({
+    slug,
+    name,
+  }));
+}
+
+export async function listNoteTags(): Promise<NoteTagOption[]> {
+  if (USE_API) {
+    try {
+      return await fetchNoteTags();
+    } catch {
+      /* fall through to dummy */
+    }
+  }
+  return DUMMY_NOTE_TAGS.map(({ slug, name }) => ({ slug, name }));
+}
+
+export async function listProducts(filters?: {
+  category?: string;
+  note?: string;
+  q?: string;
+}): Promise<CatalogProduct[]> {
+  if (USE_API) {
+    try {
+      const { items } = await fetchProducts(filters);
+      return items;
+    } catch {
+      /* fall through to dummy */
+    }
+  }
+  return dummyCatalogProducts(filters);
+}
+
+export async function getProductBySlug(
+  slug: string,
+): Promise<CatalogProduct | null> {
+  if (USE_API) {
+    try {
+      const product = await fetchProductBySlug(slug);
+      if (product) return product;
+    } catch {
+      /* fall through to dummy */
+    }
+  }
+  return dummyProductBySlug(slug);
+}
+
 export async function getAllProductSlugs(): Promise<string[]> {
   if (USE_API) {
-    const { items } = await fetchProducts({ limit: 48 });
-    return items.map((p) => p.slug);
+    try {
+      const { items } = await fetchProducts({ limit: 48 });
+      return items.map((p) => p.slug);
+    } catch {
+      /* fall through to dummy */
+    }
   }
   return DUMMY_PRODUCTS.map((p) => p.slug);
 }

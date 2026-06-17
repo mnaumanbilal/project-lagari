@@ -1,0 +1,21 @@
+# Render Blueprint — Lagari backend API
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Connect repo in Render Dashboard → New → Blueprint, or create Web Service manually
+# with Root Directory = lagari-be and the build/start commands below.
+
+services:
+  - type: web
+    name: lagari-api
+    runtime: node
+    branch: dev
+    rootDir: lagari-be
+    buildCommand: npm install --include=dev && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set the rest in Render Dashboard → Environment (secrets):
+      # DATABASE_URL, REDIS_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET,
+      # CORS_ORIGIN, DOMAIN, PUBLIC_SITE_URL, SMTP_*, CLOUDINARY_*, etc.

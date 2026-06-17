@@ -4,9 +4,13 @@
   "private": true,
   "description": "Lagari Express API — catalog, orders, sessions",
   "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "build:render": "npm install --include=dev && npm run build",
     "prestart": "npm run build",
     "start": "node dist/index.js",
     "start:prod": "node dist/index.js",
