@@ -69,7 +69,7 @@ export function ProductPurchase({ product }: ProductPurchaseProps) {
               </span>
             </>
           )}
-        </div>
+        </div> 
       )}
 
       {variant && isVariantPurchasable(variant) && (
