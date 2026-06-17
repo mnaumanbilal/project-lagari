@@ -1,4 +1,4 @@
-import { USE_API } from "@/lib/api/config";
+import { USE_API, USE_DUMMY_CATALOG } from "@/lib/api/config";
 import {
   fetchCategories,
   fetchNoteTags,
@@ -41,13 +41,13 @@ function dummyCatalogProducts(filters?: {
   }));
 }
 
-function dummyProductBySlug(slug: string): CatalogProduct | null {
-  const p = dummyGetBySlug(slug);
-  if (!p) return null;
-  return {
-    ...p,
-    ...fromListPricing(p),
-  };
+function catalogFallback(filters?: {
+  category?: string;
+  note?: string;
+  q?: string;
+}): CatalogProduct[] {
+  if (USE_DUMMY_CATALOG) return dummyCatalogProducts(filters);
+  return [];
 }
 
 export async function listCategories(): Promise<CategoryOption[]> {
@@ -55,13 +55,16 @@ export async function listCategories(): Promise<CategoryOption[]> {
     try {
       return await fetchCategories();
     } catch {
-      /* fall through to dummy */
+      /* fall through */
     }
   }
-  return Object.entries(CATEGORY_LABELS).map(([slug, name]) => ({
-    slug,
-    name,
-  }));
+  if (USE_DUMMY_CATALOG) {
+    return Object.entries(CATEGORY_LABELS).map(([slug, name]) => ({
+      slug,
+      name,
+    }));
+  }
+  return [];
 }
 
 export async function listNoteTags(): Promise<NoteTagOption[]> {
@@ -69,10 +72,13 @@ export async function listNoteTags(): Promise<NoteTagOption[]> {
     try {
       return await fetchNoteTags();
     } catch {
-      /* fall through to dummy */
+      /* fall through */
     }
   }
-  return DUMMY_NOTE_TAGS.map(({ slug, name }) => ({ slug, name }));
+  if (USE_DUMMY_CATALOG) {
+    return DUMMY_NOTE_TAGS.map(({ slug, name }) => ({ slug, name }));
+  }
+  return [];
 }
 
 export async function listProducts(filters?: {
@@ -88,7 +94,16 @@ export async function listProducts(filters?: {
       /* fall through to dummy */
     }
   }
-  return dummyCatalogProducts(filters);
+  return catalogFallback(filters);
+}
+
+function dummyProductBySlug(slug: string): CatalogProduct | null {
+  const p = dummyGetBySlug(slug);
+  if (!p) return null;
+  return {
+    ...p,
+    ...fromListPricing(p),
+  };
 }
 
 export async function getProductBySlug(
@@ -99,10 +114,11 @@ export async function getProductBySlug(
       const product = await fetchProductBySlug(slug);
       if (product) return product;
     } catch {
-      /* fall through to dummy */
+      /* fall through */
     }
   }
-  return dummyProductBySlug(slug);
+  if (USE_DUMMY_CATALOG) return dummyProductBySlug(slug);
+  return null;
 }
 
 export async function getAllProductSlugs(): Promise<string[]> {
@@ -111,10 +127,11 @@ export async function getAllProductSlugs(): Promise<string[]> {
       const { items } = await fetchProducts({ limit: 48 });
       return items.map((p) => p.slug);
     } catch {
-      /* fall through to dummy */
+      /* fall through */
     }
   }
-  return DUMMY_PRODUCTS.map((p) => p.slug);
+  if (USE_DUMMY_CATALOG) return DUMMY_PRODUCTS.map((p) => p.slug);
+  return [];
 }
 
 export async function getFeaturedAndRest(): Promise<{
