@@ -13,9 +13,11 @@ const codSchema = z.object({
 
 export async function placeCodCheckout(req: Request, res: Response) {
   const body = codSchema.parse(req.body);
+  const idempotencyKey = req.header("idempotency-key")?.trim() || undefined;
   try {
     const result = await placeCodOrder({
       sessionId: req.sessionId!,
+      idempotencyKey,
       ...body,
     });
     if (!result) throw new AppError(409, "Cart is empty");

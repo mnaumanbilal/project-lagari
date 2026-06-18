@@ -6,10 +6,16 @@ export type SessionResponse = {
   expiresAt: string;
 };
 
-export async function createSession(visitorId?: string): Promise<SessionResponse> {
+export async function createSession(
+  visitorId?: string,
+  previousSessionId?: string,
+): Promise<SessionResponse> {
+  const body: { visitorId?: string; previousSessionId?: string } = {};
+  if (visitorId) body.visitorId = visitorId;
+  if (previousSessionId) body.previousSessionId = previousSessionId;
   return apiFetch<SessionResponse>("/sessions", {
     method: "POST",
-    body: JSON.stringify(visitorId ? { visitorId } : {}),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
 }

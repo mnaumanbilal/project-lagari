@@ -6,7 +6,6 @@ import { LagariLogo } from "@/components/brand/LagariLogo";
 import { USE_API } from "@/lib/api/config";
 import { placeCodOrder } from "@/lib/api/cart";
 import { ApiError } from "@/lib/api/client";
-import { withSessionRetry } from "@/lib/api/with-session-retry";
 import { markCheckoutPlaced } from "@/lib/analytics/checkout-placed";
 import { trackOrderPlaced } from "@/lib/analytics/event-buffer";
 import { CheckoutAnalytics } from "@/components/storefront/CheckoutAnalytics";
@@ -31,13 +30,14 @@ const PK_CITIES = [
 
 export function CheckoutForm() {
   const { lines, clearCart, ready } = useCart();
-  const { ensureSession, refreshSession } = useSession();
+  const { sessionId, ensureSession } = useSession();
   const toast = useStorefrontToast();
   const [submitted, setSubmitted] = useState(false);
   const [orderNumber, setOrderNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const placingRef = useRef(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   if (!ready) {
     return (
@@ -97,6 +97,11 @@ export function CheckoutForm() {
         onSubmit={async (e) => {
           e.preventDefault();
           if (placingRef.current || submitting) return;
+          if (!lines.length) {
+            setError("Your bag is empty. Add an item before placing your order.");
+            return;
+          }
+
           placingRef.current = true;
           setError(null);
           setSubmitting(true);
@@ -111,12 +116,18 @@ export function CheckoutForm() {
             ...(emailRaw ? { email: emailRaw } : {}),
           };
 
+          if (!idempotencyKeyRef.current) {
+            idempotencyKeyRef.current = crypto.randomUUID();
+          }
+
+          let succeeded = false;
           try {
             if (USE_API) {
-              const order = await withSessionRetry(
-                ensureSession,
-                refreshSession,
-                (id) => placeCodOrder(id, body),
+              const activeSessionId = sessionId ?? (await ensureSession());
+              const order = await placeCodOrder(
+                activeSessionId,
+                body,
+                idempotencyKeyRef.current,
               );
               setOrderNumber(order.orderNumber);
               markCheckoutPlaced();
@@ -124,19 +135,23 @@ export function CheckoutForm() {
             }
             clearCart();
             setSubmitted(true);
+            succeeded = true;
           } catch (err) {
             const message =
               err instanceof ApiError
-                ? err.message
+                ? err.status === 401
+                  ? "Your session expired. Refresh the page and try again."
+                  : err.message
                 : "Could not place order. Please try again.";
             setError(message);
-            // Also toast for visibility on long pages where the error banner may be scrolled above viewport
             if (!(err instanceof ApiError) || err.status >= 500) {
               toast.error(message);
             }
           } finally {
             setSubmitting(false);
-            placingRef.current = false;
+            if (!succeeded) {
+              placingRef.current = false;
+            }
           }
         }}
       >

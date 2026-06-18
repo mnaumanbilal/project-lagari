@@ -42,10 +42,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [visitorId, setVisitorId] = useState<string | null>(null);
   const [ready, setReady] = useState(!USE_API);
 
-  const createAndStoreSession = useCallback(async (): Promise<string> => {
+  const createAndStoreSession = useCallback(async (previousSessionId?: string): Promise<string> => {
     const vid = getOrCreateVisitorId();
     setVisitorId(vid);
-    const session = await createSession(vid);
+    const session = await createSession(vid, previousSessionId);
     if (session.visitorId) {
       localStorage.setItem(VISITOR_STORAGE_KEY, session.visitorId);
       setVisitorId(session.visitorId);
@@ -94,6 +94,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         } catch {
           sessionStorage.removeItem(SESSION_STORAGE_KEY);
           sessionStorage.removeItem(SESSION_TOUCH_KEY);
+          return createAndStoreSession(stored);
         }
       }
 
@@ -109,9 +110,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const refreshSession = useCallback(async (): Promise<string> => {
     if (!USE_API) return "";
+    const previous = sessionStorage.getItem(SESSION_STORAGE_KEY) ?? undefined;
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_TOUCH_KEY);
     setSessionId(null);
-    return createAndStoreSession();
+    return createAndStoreSession(previous);
   }, [createAndStoreSession]);
 
   useEffect(() => {

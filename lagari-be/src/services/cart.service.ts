@@ -42,3 +42,42 @@ export function computeSubtotal(items: CartLine[]): number {
     0,
   );
 }
+
+function mergeCartLines(existing: CartLine[], incoming: CartLine[]): CartLine[] {
+  const byVariant = new Map<string, CartLine>();
+  for (const line of existing) {
+    byVariant.set(line.variantId, { ...line });
+  }
+  for (const line of incoming) {
+    const prev = byVariant.get(line.variantId);
+    if (!prev) {
+      byVariant.set(line.variantId, { ...line });
+      continue;
+    }
+    byVariant.set(line.variantId, {
+      ...prev,
+      ...line,
+      quantity: Math.max(prev.quantity, line.quantity),
+      imageUrl: line.imageUrl ?? prev.imageUrl,
+      productSlug: line.productSlug || prev.productSlug,
+    });
+  }
+  return Array.from(byVariant.values());
+}
+
+/** Move cart lines from an expired session into the active session. */
+export async function migrateCart(
+  fromSessionId: string,
+  toSessionId: string,
+): Promise<void> {
+  if (!fromSessionId || fromSessionId === toSessionId) return;
+
+  const fromCart = await getCart(fromSessionId);
+  if (!fromCart.items.length) return;
+
+  const toCart = await getCart(toSessionId);
+  const items = mergeCartLines(toCart.items, fromCart.items);
+  const payload = { items, subtotalPkr: computeSubtotal(items) };
+  await saveCart(toSessionId, payload);
+  await clearCart(fromSessionId);
+}

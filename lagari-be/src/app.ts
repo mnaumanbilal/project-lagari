@@ -25,7 +25,13 @@ export function createApp() {
         return callback(new Error(`CORS blocked for origin: ${origin}`));
       },
       credentials: true,
-      allowedHeaders: ["Content-Type", "Authorization", "X-Session-Id", "X-Request-Id"],
+      allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-Session-Id",
+        "X-Request-Id",
+        "Idempotency-Key",
+      ],
       exposedHeaders: ["X-Request-Id"],
     }),
   );

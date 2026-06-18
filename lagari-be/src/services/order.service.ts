@@ -18,7 +18,40 @@ import {
   notifyOrderStatusChanged,
 } from "./notification.service";
 import { tryNormalizePkPhone, normalizeEmail } from "../utils/contact-normalize";
-import { cacheDel, cacheSetNx } from "../lib/redis";
+import { cacheDel, cacheGet, cacheSet, cacheSetNx } from "../lib/redis";
+import { logger } from "../utils/logger";
+
+const CHECKOUT_IDEMPOTENCY_TTL_SEC = 3600;
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type CheckoutResult = {
+  orderId: string;
+  orderNumber: number;
+  totalPkr: number;
+};
+
+async function readIdempotentCheckout(
+  idempotencyKey: string,
+): Promise<CheckoutResult | null> {
+  const cached = await cacheGet(`checkout:idempotency:${idempotencyKey}`);
+  if (!cached) return null;
+  try {
+    return JSON.parse(cached) as CheckoutResult;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForIdempotentCheckout(
+  idempotencyKey: string,
+): Promise<CheckoutResult | null> {
+  for (let i = 0; i < 24; i++) {
+    const cached = await readIdempotentCheckout(idempotencyKey);
+    if (cached) return cached;
+    await sleep(250);
+  }
+  return null;
+}
 
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ["confirmed", "rto", "cancelled"],
@@ -349,10 +382,23 @@ export async function placeCodOrder(input: {
   city: string;
   address: string;
   email?: string;
+  idempotencyKey?: string;
 }) {
-  const lockKey = `checkout:lock:${input.sessionId}`;
-  const locked = await cacheSetNx(lockKey, "1", 60);
+  const idempotencyKey = input.idempotencyKey?.trim();
+  if (idempotencyKey) {
+    const cached = await readIdempotentCheckout(idempotencyKey);
+    if (cached) return cached;
+  }
+
+  const lockKey = idempotencyKey
+    ? `checkout:idempotency:lock:${idempotencyKey}`
+    : `checkout:lock:${input.sessionId}`;
+  const locked = await cacheSetNx(lockKey, "1", 120);
   if (!locked) {
+    if (idempotencyKey) {
+      const cached = await waitForIdempotentCheckout(idempotencyKey);
+      if (cached) return cached;
+    }
     throw new AppError(
       409,
       "Checkout already in progress. Please wait a moment.",
@@ -360,10 +406,25 @@ export async function placeCodOrder(input: {
   }
 
   try {
+    if (idempotencyKey) {
+      const cached = await readIdempotentCheckout(idempotencyKey);
+      if (cached) return cached;
+    }
+
     const cart = await getCart(input.sessionId);
     if (!cart.items.length) {
       return null;
     }
+
+    logger.info(
+      {
+        sessionId: input.sessionId,
+        idempotencyKey: idempotencyKey ?? null,
+        itemCount: cart.items.length,
+        variantIds: cart.items.map((line) => line.variantId),
+      },
+      "checkout.place_cod",
+    );
 
     // Normalise contact before storing so review lookups always match
     const normalizedPhone = tryNormalizePkPhone(input.phone) ?? input.phone;
@@ -371,7 +432,7 @@ export async function placeCodOrder(input: {
       try { return normalizeEmail(input.email!); } catch { return input.email!; }
     })() : undefined;
 
-    return await sequelize.transaction(async (t) => {
+    const result = await sequelize.transaction(async (t) => {
     const [customer] = await Customer.findOrCreate({
       where: { phone: normalizedPhone },
       defaults: {
@@ -449,7 +510,7 @@ export async function placeCodOrder(input: {
 
     await clearCart(input.sessionId);
 
-    const result = {
+    const orderResult: CheckoutResult = {
       orderId: order.id,
       orderNumber: order.orderNumber,
       totalPkr: order.totalPkr,
@@ -469,8 +530,18 @@ export async function placeCodOrder(input: {
       );
     }
 
-    return result;
+    return orderResult;
     });
+
+    if (idempotencyKey) {
+      await cacheSet(
+        `checkout:idempotency:${idempotencyKey}`,
+        JSON.stringify(result),
+        CHECKOUT_IDEMPOTENCY_TTL_SEC,
+      );
+    }
+
+    return result;
   } finally {
     await cacheDel(lockKey);
   }

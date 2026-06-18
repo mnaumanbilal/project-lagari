@@ -60,10 +60,16 @@ export type OrderCreated = {
 export async function placeCodOrder(
   sessionId: string,
   body: CodCheckoutBody,
+  idempotencyKey?: string,
 ): Promise<OrderCreated> {
+  const headers: Record<string, string> = {};
+  if (idempotencyKey) {
+    headers["Idempotency-Key"] = idempotencyKey;
+  }
   return apiFetch<OrderCreated>("/checkout/cod", {
     method: "POST",
     sessionId,
+    headers,
     body: JSON.stringify(body),
     cache: "no-store",
   });
