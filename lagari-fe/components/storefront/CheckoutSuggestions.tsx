@@ -9,14 +9,13 @@ import { getDefaultVariant, isVariantPurchasable } from "@/lib/cart/helpers";
 import { useCart } from "@/lib/cart/cart-context";
 import { formatPkr } from "@/lib/format";
 import { cloudinaryPresets } from "@/lib/media/cloudinary";
+import { PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/site/placeholder-image";
 import {
   pickCheckoutSuggestions,
   suggestionHeadline,
 } from "@/lib/checkout/suggest-products";
 
-const FALLBACK_IMAGE = cloudinaryPresets.productCard(
-  "https://images.unsplash.com/photo-1541643600914-78b084683601?w=400&q=80",
-);
+const FALLBACK_IMAGE = cloudinaryPresets.productCard(PRODUCT_PLACEHOLDER_IMAGE);
 
 export function CheckoutSuggestions() {
   const { lines, addItem, ready: cartReady } = useCart();

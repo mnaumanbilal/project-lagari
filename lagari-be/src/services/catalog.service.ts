@@ -218,3 +218,14 @@ export async function getProductBySlug(slug: string) {
     reviewSummary,
   };
 }
+
+/** Hero image URL for cart line snapshots (card-sized transform). */
+export async function getProductHeroImageUrl(
+  productId: string,
+): Promise<string | undefined> {
+  const images = await ProductImage.findAll({
+    where: { productId },
+    order: [["sort_order", "ASC"]],
+  });
+  return heroUrl(images, "card");
+}

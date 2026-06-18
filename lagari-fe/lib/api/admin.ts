@@ -206,6 +206,10 @@ export type FetchAdminReviewsParams = {
   status: "all" | "pending" | "published";
   /** Partial match on product slug or title (case-insensitive). */
   productSearch?: string;
+  /** Partial match on author, body, phone, or email. */
+  reviewSearch?: string;
+  /** Pin a single review (deep link from email). */
+  reviewId?: string;
   from?: string;
   to?: string;
   sort?: "newest" | "oldest" | "rating_high" | "rating_low";
@@ -473,6 +477,8 @@ export async function fetchAdminReviews(
 ): Promise<AdminReviewsListResponse> {
   const q = new URLSearchParams({ status: params.status });
   if (params.productSearch) q.set("productSearch", params.productSearch);
+  if (params.reviewSearch) q.set("reviewSearch", params.reviewSearch);
+  if (params.reviewId) q.set("reviewId", params.reviewId);
   if (params.from) q.set("from", params.from);
   if (params.to) q.set("to", params.to);
   if (params.sort) q.set("sort", params.sort);

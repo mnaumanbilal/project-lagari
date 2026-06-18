@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { Product, ProductVariant } from "../db/models";
 import { AppError } from "../middleware/errorHandler";
+import { getProductHeroImageUrl } from "../services/catalog.service";
 import {
   computeSubtotal,
   getCart,
@@ -18,6 +19,23 @@ const addSchema = z.object({
   quantity: z.number().int().positive(),
 });
 
+async function buildCartLine(
+  variant: ProductVariant & { product?: Product },
+  quantity: number,
+): Promise<CartLine> {
+  const product = variant.product!;
+  const imageUrl = await getProductHeroImageUrl(product.id);
+  return {
+    variantId: variant.id,
+    productTitle: product.title,
+    productSlug: product.slug,
+    variantName: variant.name,
+    quantity,
+    unitPricePkr: variant.pricePkr,
+    imageUrl: imageUrl ?? undefined,
+  };
+}
+
 export async function upsertCartItem(req: Request, res: Response) {
   const body = addSchema.parse(req.body);
   const variant = await ProductVariant.findByPk(body.variantId, {
@@ -33,23 +51,22 @@ export async function upsertCartItem(req: Request, res: Response) {
 
   const cart = await getCart(req.sessionId!);
   const existing = cart.items.find((i) => i.variantId === body.variantId);
+  const freshLine = await buildCartLine(
+    variant as ProductVariant & { product: Product },
+    body.quantity,
+  );
+
   const items: CartLine[] = existing
     ? cart.items.map((i) =>
         i.variantId === body.variantId
-          ? { ...i, quantity: body.quantity }
+          ? {
+              ...freshLine,
+              imageUrl: freshLine.imageUrl ?? i.imageUrl,
+              productSlug: freshLine.productSlug || i.productSlug,
+            }
           : i,
       )
-    : [
-        ...cart.items,
-        {
-          variantId: variant.id,
-          productTitle: product.title,
-          productSlug: product.slug,
-          variantName: variant.name,
-          quantity: body.quantity,
-          unitPricePkr: variant.pricePkr,
-        },
-      ];
+    : [...cart.items, freshLine];
 
   const payload = { items, subtotalPkr: computeSubtotal(items) };
   await saveCart(req.sessionId!, payload);

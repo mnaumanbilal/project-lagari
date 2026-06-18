@@ -7,11 +7,10 @@ import { ProductRatingSummary } from "@/components/storefront/ProductRatingSumma
 import { isProductOnSale, saleDiscountPercent } from "@/lib/catalog/pricing";
 import { formatPkr } from "@/lib/format";
 import { cloudinaryPresets } from "@/lib/media/cloudinary";
+import { PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/site/placeholder-image";
 import type { CatalogProduct } from "@/lib/types/catalog";
 
-const FALLBACK_HERO = cloudinaryPresets.productCard(
-  "https://images.unsplash.com/photo-1541643600914-78b084683601?w=800&q=80",
-);
+const FALLBACK_HERO = cloudinaryPresets.productCard(PRODUCT_PLACEHOLDER_IMAGE);
 
 type ProductCardProps = {
   product: CatalogProduct;

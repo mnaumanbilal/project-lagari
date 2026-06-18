@@ -4,10 +4,11 @@ import { cacheDel, cacheGet, cacheSet } from "../lib/redis";
 export interface CartLine {
   variantId: string;
   productTitle: string;
-  productSlug?: string;
+  productSlug: string;
   variantName: string;
   quantity: number;
   unitPricePkr: number;
+  imageUrl?: string;
 }
 
 export interface CartPayload {

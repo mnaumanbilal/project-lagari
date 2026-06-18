@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { StarRating } from "@/components/storefront/StarRating";
 import { StorefrontProductLink } from "@/components/storefront/StorefrontProductLink";
 import { AdminBulkActionBar } from "@/components/admin/AdminBulkActionBar";
@@ -222,11 +223,16 @@ function LinkedOrderPanel({ reviewId }: { reviewId: string }) {
 
 export function AdminReviews() {
   const toast = useAdminToast();
+  const searchParams = useSearchParams();
+  const highlightReviewId = searchParams.get("review");
   const { state, setState, patchState } = useReviewToolbarState();
   const [page, setPage] = useState(1);
   const fetchParams = useMemo(
-    () => reviewToolbarToFetchParams(state, page),
-    [state, page],
+    () => ({
+      ...reviewToolbarToFetchParams(state, page),
+      reviewId: highlightReviewId ?? undefined,
+    }),
+    [state, page, highlightReviewId],
   );
   const { data, isLoading, isError, error, refetch } = useAdminReviews(fetchParams);
   const analyticsQuery = useReviewAnalytics({ preset: "last_7_days" });
@@ -251,6 +257,16 @@ export function AdminReviews() {
   const stats = analyticsQuery.data;
   const statsSyncing =
     analyticsQuery.isFetching && analyticsQuery.data !== undefined;
+
+  useEffect(() => {
+    if (!highlightReviewId || isLoading) return;
+    const el = document.querySelector(
+      `[data-review-id="${highlightReviewId}"]`,
+    );
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlightReviewId, isLoading, reviews]);
 
   async function handleImport(file: File) {
     const text = await file.text();
@@ -451,7 +467,15 @@ export function AdminReviews() {
               Select all on this page
             </li>
             {reviews.map((r) => (
-              <li key={r.id} className="admin-card p-4">
+              <li
+                key={r.id}
+                data-review-id={r.id}
+                className={`admin-card p-4 ${
+                  highlightReviewId === r.id
+                    ? "ring-2 ring-lagari-brass ring-offset-2 ring-offset-lagari-deep"
+                    : ""
+                }`}
+              >
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
                   <div className="flex gap-3">
                     <input

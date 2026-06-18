@@ -9,6 +9,7 @@ import type { FetchAdminReviewsParams } from "@/lib/api/admin";
 export type ReviewToolbarState = {
   tab: "all" | "pending";
   productSearch: string;
+  reviewSearch: string;
   datePreset: "all" | "7d" | "30d";
   sort: NonNullable<FetchAdminReviewsParams["sort"]>;
   ratingBand: "all" | "low" | "mid" | "high";
@@ -47,9 +48,12 @@ function parseState(search: URLSearchParams): ReviewToolbarState {
     search.get("productSlug") ??
     "";
 
+  const reviewSearch = search.get("q") ?? search.get("reviewSearch") ?? "";
+
   return {
     tab,
     productSearch,
+    reviewSearch,
     datePreset,
     sort,
     ratingBand,
@@ -61,6 +65,8 @@ function stateToSearchParams(state: ReviewToolbarState): URLSearchParams {
   if (state.tab === "pending") q.set("status", "pending");
   const product = state.productSearch.trim();
   if (product) q.set("product", product);
+  const reviewQ = state.reviewSearch.trim();
+  if (reviewQ) q.set("q", reviewQ);
   if (state.datePreset !== "all") q.set("date", state.datePreset);
   if (state.ratingBand !== "all") q.set("rating", state.ratingBand);
   if (state.sort !== "newest") q.set("sort", state.sort);
@@ -100,9 +106,11 @@ export function reviewToolbarToFetchParams(
   page = 1,
 ): FetchAdminReviewsParams {
   const productSearch = state.productSearch.trim();
+  const reviewSearch = state.reviewSearch.trim();
   return {
     status: state.tab === "pending" ? "pending" : "all",
     productSearch: productSearch || undefined,
+    reviewSearch: reviewSearch || undefined,
     sort: state.sort,
     page,
     limit: 25,
@@ -183,6 +191,41 @@ function AdminReviewTabs({
   );
 }
 
+function DebouncedReviewSearchField({
+  committed,
+  onCommit,
+}: {
+  committed: string;
+  onCommit: (value: string) => void;
+}) {
+  const { draft, setDraft, isDebouncing } = useDebouncedCommit(
+    committed,
+    onCommit,
+    ADMIN_FILTER_DEBOUNCE_MS,
+  );
+
+  return (
+    <label className="block text-sm sm:col-span-2">
+      <span className="font-medium text-lagari-muted">Search reviews</span>
+      <input
+        type="search"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Name, review text, phone, or email…"
+        autoComplete="off"
+        className="admin-input mt-1.5 w-full px-3 py-2"
+      />
+      {isDebouncing ? (
+        <p className="mt-1 text-xs text-lagari-muted">Searching…</p>
+      ) : (
+        <p className="mt-1 text-xs text-lagari-muted">
+          Matches reviewer name, review body, or submission contact.
+        </p>
+      )}
+    </label>
+  );
+}
+
 function DebouncedProductSearchField({
   committed,
   onCommit,
@@ -232,8 +275,16 @@ export function AdminReviewsToolbar({
     [onPatch],
   );
 
+  const commitReviewSearch = useCallback(
+    (reviewSearch: string) => {
+      onPatch({ reviewSearch });
+    },
+    [onPatch],
+  );
+
   const hasFilters =
     state.productSearch.trim() !== "" ||
+    state.reviewSearch.trim() !== "" ||
     state.datePreset !== "all" ||
     state.ratingBand !== "all" ||
     state.sort !== "newest";
@@ -250,6 +301,10 @@ export function AdminReviewsToolbar({
       </div>
 
       <div className="space-y-4 p-4">
+        <DebouncedReviewSearchField
+          committed={state.reviewSearch}
+          onCommit={commitReviewSearch}
+        />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <DebouncedProductSearchField
           committed={state.productSearch}
@@ -317,6 +372,7 @@ export function AdminReviewsToolbar({
             onChange({
               tab: state.tab,
               productSearch: "",
+              reviewSearch: "",
               datePreset: "all",
               sort: "newest",
               ratingBand: "all",
@@ -343,7 +399,10 @@ export function useReviewToolbarState() {
 
   const setState = useCallback(
     (next: ReviewToolbarState) => {
-      const qs = stateToSearchParams(next).toString();
+      const q = stateToSearchParams(next);
+      const reviewId = searchParams.get("review");
+      if (reviewId) q.set("review", reviewId);
+      const qs = q.toString();
       if (qs === searchParams.toString()) return;
       router.replace(
         qs
@@ -357,7 +416,10 @@ export function useReviewToolbarState() {
   const patchState = useCallback(
     (patch: Partial<ReviewToolbarState>) => {
       const next = { ...parseState(searchParams), ...patch };
-      const qs = stateToSearchParams(next).toString();
+      const q = stateToSearchParams(next);
+      const reviewId = searchParams.get("review");
+      if (reviewId) q.set("review", reviewId);
+      const qs = q.toString();
       if (qs === searchParams.toString()) return;
       router.replace(
         qs

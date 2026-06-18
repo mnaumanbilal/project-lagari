@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { QuantityStepper } from "@/components/storefront/QuantityStepper";
 import { formatPkr } from "@/lib/format";
+import { cloudinaryPresets } from "@/lib/media/cloudinary";
+import { PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/site/placeholder-image";
 import { productPath } from "@/lib/storefront/product-url";
 import type { CartLine } from "@/lib/cart/cart-context";
 import { useCart } from "@/lib/cart/cart-context";
@@ -36,6 +38,9 @@ export function CartLineItem({ line, compact }: Props) {
   }
 
   const productHref = productPath(line.productSlug) ?? "/shop";
+  const imageSrc =
+    cloudinaryPresets.productCard(line.imageUrl) ||
+    cloudinaryPresets.productCard(PRODUCT_PLACEHOLDER_IMAGE);
 
   return (
     <li className={`flex gap-4 ${compact ? "" : "border-b border-lagari-border pb-4 last:border-0 last:pb-0"}`}>
@@ -44,7 +49,7 @@ export function CartLineItem({ line, compact }: Props) {
         className="relative h-16 w-14 shrink-0 overflow-hidden rounded-sm bg-lagari-deep"
       >
         <Image
-          src={line.imageUrl}
+          src={imageSrc}
           alt=""
           fill
           className="object-cover"

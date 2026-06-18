@@ -452,7 +452,7 @@ export function ProductReviews({ slug }: { slug: string }) {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || !eligibilityOk}
             className="rounded-sm border border-lagari-brass px-6 py-3 font-label text-sm text-lagari-brass transition-colors hover:bg-lagari-brass/10 disabled:opacity-50"
           >
             {submitting ? "Submitting…" : "Submit review"}

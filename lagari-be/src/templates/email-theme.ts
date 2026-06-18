@@ -1,4 +1,6 @@
 /** Shared Lagari email theme — matches lagari-fe/app/globals.css */
+import { customerWhatsAppHref } from "../utils/customer-whatsapp";
+
 export const C = {
   bgOuter: "#0a0908",
   bgCard: "#141210",
@@ -85,6 +87,33 @@ export function absoluteUrl(baseUrl: string, path: string): string {
 
 export function formatPkrEmail(amount: number): string {
   return `PKR ${amount.toLocaleString("en-PK")}`;
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Clickable phone + optional WhatsApp for admin emails. */
+export function emailContactLinksHtml(phone: string): string {
+  if (!phone || phone === "—") return "—";
+  const wa = customerWhatsAppHref(phone);
+  const phoneLink = `<a href="tel:${escapeHtml(phone)}" style="color:${C.text};text-decoration:none;">${escapeHtml(phone)}</a>`;
+  if (!wa) return phoneLink;
+  return `${phoneLink} · <a href="${wa}" style="color:#25D366;text-decoration:none;font-weight:600;">WhatsApp</a>`;
+}
+
+/** Email-safe 5-star rating row with numeric label. */
+export function emailStarRatingHtml(rating: number): string {
+  const clamped = Math.min(5, Math.max(0, Math.round(rating)));
+  const stars = Array.from({ length: 5 }, (_, i) => {
+    const filled = i < clamped;
+    return `<span style="color:${filled ? C.label : C.textMuted};font-size:16px;line-height:1;">${filled ? "★" : "☆"}</span>`;
+  }).join("");
+  return `<span style="white-space:nowrap;">${stars}</span> <span style="color:${C.textMuted};font-size:13px;margin-left:6px;">${clamped}/5</span>`;
 }
 
 /** Row for order line-item tables in customer + admin emails. */

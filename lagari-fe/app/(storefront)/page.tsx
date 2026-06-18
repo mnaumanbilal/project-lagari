@@ -1,10 +1,18 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { HeroBanner } from "@/components/storefront/HeroBanner";
 import { HomeProductsSection } from "@/components/storefront/HomeProductsSection";
 import { StorefrontLoading } from "@/components/storefront/StorefrontLoading";
 import { listProducts } from "@/lib/catalog";
 
 export const revalidate = 60;
+
+export const metadata: Metadata = {
+  title: "Luxury Fragrance Impressions",
+  description:
+    "Discover artisanal impressions of iconic designer fragrances. Cash on delivery across Pakistan.",
+  alternates: { canonical: "/" },
+};
 
 async function HomeProductsLoader() {
   const products = await listProducts();

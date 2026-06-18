@@ -4,14 +4,16 @@ import {
   buildAdminOrderPlainText,
   formatStatusLabel,
 } from "../services/admin-order-email";
-import { customerWhatsAppHref } from "../utils/customer-whatsapp";
 import {
   absoluteUrl,
   buildOrderLineItemsTableHtml,
   C,
   emailButton,
+  emailContactLinksHtml,
   emailDetailRow,
   emailLayout,
+  emailStarRatingHtml,
+  escapeHtml,
   FONT,
 } from "./email-theme";
 
@@ -39,7 +41,7 @@ const CTA_LABELS: Record<AdminNotificationType, string> = {
   "order.status_changed": "View order",
   "inventory.low_stock": "Edit product",
   "product.updated": "View product",
-  "review.submitted": "View reviews",
+  "review.submitted": "View this review",
 };
 
 function isOrderSnapshot(value: unknown): value is AdminOrderEmailSnapshot {
@@ -79,16 +81,14 @@ function orderDetailsHtml(
     emailDetailRow("Customer", order.customerName),
     emailDetailRow(
       "Phone",
-      (() => {
-        const wa = customerWhatsAppHref(order.customerPhone);
-        const phoneLink = `<a href="tel:${order.customerPhone}" style="color:${C.text};text-decoration:none;">${order.customerPhone}</a>`;
-        if (!wa) return phoneLink;
-        return `${phoneLink} · <a href="${wa}" style="color:#25D366;text-decoration:none;font-weight:600;">WhatsApp</a>`;
-      })(),
+      emailContactLinksHtml(order.customerPhone),
     ),
-    emailDetailRow("Email", order.customerEmail
-      ? `<a href="mailto:${order.customerEmail}" style="color:${C.label};text-decoration:none;">${order.customerEmail}</a>`
-      : "—"),
+    emailDetailRow(
+      "Email",
+      order.customerEmail
+        ? `<a href="mailto:${order.customerEmail}" style="color:${C.label};text-decoration:none;">${escapeHtml(order.customerEmail)}</a>`
+        : "—",
+    ),
     emailDetailRow(
       "Address",
       `<span style="color:${C.text};">${order.shippingAddress.replace(/\n/g, "<br>")}</span><br><span style="color:${C.textMuted};">${order.shippingCity}</span>`,
@@ -126,6 +126,74 @@ function orderDetailsHtml(
   </div>`;
 }
 
+type ReviewEmailPayload = {
+  productTitle: string;
+  productSlug: string;
+  authorName: string;
+  rating: number;
+  body: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  isPublished: boolean;
+};
+
+function isReviewPayload(p: Record<string, unknown>): p is ReviewEmailPayload {
+  return (
+    typeof p.productTitle === "string" &&
+    typeof p.authorName === "string" &&
+    typeof p.rating === "number" &&
+    typeof p.body === "string"
+  );
+}
+
+function reviewDetailsHtml(p: ReviewEmailPayload): string {
+  const rows: string[] = [
+    emailDetailRow("Product", escapeHtml(p.productTitle)),
+    emailDetailRow("Reviewer", escapeHtml(p.authorName)),
+    emailDetailRow("Rating", emailStarRatingHtml(p.rating)),
+    emailDetailRow(
+      "Phone",
+      p.contactPhone ? emailContactLinksHtml(p.contactPhone) : "—",
+    ),
+    emailDetailRow(
+      "Email",
+      p.contactEmail
+        ? `<a href="mailto:${escapeHtml(p.contactEmail)}" style="color:${C.label};text-decoration:none;">${escapeHtml(p.contactEmail)}</a>`
+        : "—",
+    ),
+    emailDetailRow(
+      "Status",
+      p.isPublished ? "Published" : "Pending moderation",
+    ),
+  ];
+
+  return `<table role="presentation" class="email-inset" width="100%" cellpadding="0" cellspacing="0" bgcolor="${C.bgInset}" style="margin:20px 0 0;background-color:${C.bgInset};border:1px solid ${C.border};border-radius:4px;">
+    <tr>
+      <td style="padding:14px 16px;">
+        <p style="margin:0 0 10px;font-family:${FONT};font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:${C.label};">Review details</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows.join("")}</table>
+        <div style="margin:16px 0 0;padding:14px 16px;border-left:3px solid ${C.label};background-color:${C.bgCard};border-radius:0 4px 4px 0;">
+          <p style="margin:0 0 6px;font-family:${FONT};font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:${C.textMuted};">Customer wrote</p>
+          <p style="margin:0;font-family:${FONT};font-size:14px;line-height:1.6;color:${C.text};white-space:pre-wrap;">${escapeHtml(p.body)}</p>
+        </div>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function buildReviewPlainText(p: ReviewEmailPayload): string {
+  const lines = [
+    `Product: ${p.productTitle}`,
+    `Reviewer: ${p.authorName}`,
+    `Rating: ${p.rating}/5`,
+    p.contactPhone ? `Phone: ${p.contactPhone}` : null,
+    p.contactEmail ? `Email: ${p.contactEmail}` : null,
+    "",
+    p.body,
+  ].filter((line): line is string => line != null);
+  return lines.join("\n");
+}
+
 function detailRows(ctx: AdminNotificationEmailContext): string {
   const p = ctx.payload ?? {};
 
@@ -135,6 +203,10 @@ function detailRows(ctx: AdminNotificationEmailContext): string {
         ? { fromStatus: p.fromStatus, toStatus: p.toStatus }
         : undefined;
     return orderDetailsHtml(p.order, ctx.storefrontSiteUrl, extras);
+  }
+
+  if (ctx.type === "review.submitted" && isReviewPayload(p)) {
+    return reviewDetailsHtml(p);
   }
 
   const rows: string[] = [];
@@ -182,10 +254,16 @@ export function buildAdminNotificationEmail(ctx: AdminNotificationEmailContext):
   const orderSnapshot = isOrderSnapshot(ctx.payload?.order)
     ? ctx.payload.order
     : null;
+  const reviewPayload =
+    ctx.type === "review.submitted" && isReviewPayload(ctx.payload ?? {})
+      ? (ctx.payload as ReviewEmailPayload)
+      : null;
 
   const text = orderSnapshot
     ? `${ctx.title}\n\n${buildAdminOrderPlainTextFromContext(ctx)}\n\n${actionUrl}\n\n— Lagari Admin`
-    : `${ctx.title}\n\n${ctx.body}\n\n${actionUrl}\n\n— Lagari Admin`;
+    : reviewPayload
+      ? `${ctx.title}\n\n${buildReviewPlainText(reviewPayload)}\n\n${actionUrl}\n\n— Lagari Admin`
+      : `${ctx.title}\n\n${ctx.body}\n\n${actionUrl}\n\n— Lagari Admin`;
 
   const inner = `
     <p style="margin:0 0 16px;font-family:${FONT};font-size:11px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:${C.label};">Lagari · Admin</p>

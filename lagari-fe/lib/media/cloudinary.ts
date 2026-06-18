@@ -78,6 +78,8 @@ export const cloudinaryPresets = {
     cloudinaryImageUrl(src, { width: 1200, crop: "limit" }),
   productGalleryThumb: (src: string | undefined | null) =>
     cloudinaryImageUrl(src, { width: 144, height: 160, crop: "fill" }),
+  ogShare: (src: string | undefined | null) =>
+    cloudinaryImageUrl(src, { width: 1200, height: 630, crop: "fill" }),
   heroBanner: (src: string | undefined | null) =>
     cloudinaryImageUrl(src, { width: 1920, crop: "limit" }),
 };

@@ -2,11 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductGallery } from "@/components/storefront/ProductGallery";
+import { ProductJsonLd } from "@/components/storefront/ProductJsonLd";
 import { ProductPurchase } from "@/components/storefront/ProductPurchase";
 import { ProductRatingSummary } from "@/components/storefront/ProductRatingSummary";
-import { buildGalleryImages } from "@/lib/product-gallery";
 import { ProductReviews } from "@/components/storefront/ProductReviews";
+import { ProductShare } from "@/components/storefront/ProductShare";
 import { ProductViewTracker } from "@/components/storefront/ProductViewTracker";
+import {
+  buildProductMetadata,
+  buildProductShareText,
+} from "@/lib/seo/product-metadata";
 import { getAllProductSlugs, getProductBySlug } from "@/lib/catalog";
 
 export const revalidate = 60;
@@ -26,27 +31,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) return { title: "Not found" };
-
-  const inspiration = product.designerInspiration
-    ? `Inspired by ${product.designerInspiration}. `
-    : "";
-  const description = `${inspiration}Artisanal impression — COD across Pakistan.`;
-
-  const galleryImages = buildGalleryImages(product);
-  const ogImage = galleryImages[0]?.url;
-
-  return {
-    title: product.title,
-    description,
-    openGraph: {
-      title: `${product.title} — Lagari`,
-      description,
-      images: ogImage
-        ? [{ url: ogImage, width: 1200, height: 630 }]
-        : undefined,
-      type: "website",
-    },
-  };
+  return buildProductMetadata(product, slug);
 }
 
 export default async function ProductPage({ params }: ProductPageProps) {
@@ -56,6 +41,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
+      <ProductJsonLd product={product} slug={slug} />
       <ProductViewTracker slug={slug} />
       <Link
         href="/shop"
@@ -82,6 +68,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
             href="#reviews"
             className="mt-3"
           />
+          <ProductShare slug={slug} shareText={buildProductShareText(product)} />
           {product.description && (
             <div
               className="prose-lagari mt-6 space-y-4 leading-relaxed text-lagari-muted [&_h3]:font-display [&_h3]:text-lg [&_h3]:text-lagari-primary [&_p]:mt-0 [&_strong]:text-lagari-primary"

@@ -298,11 +298,15 @@ export async function notifyProductUpdated(input: {
 export async function notifyReviewSubmitted(input: {
   reviewId: string;
   productTitle: string;
+  productSlug: string;
   authorName: string;
   rating: number;
+  body: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
   isPublished: boolean;
 }) {
-  const linkPath = `/admin-panel-route/reviews`;
+  const linkPath = `/admin-panel-route/reviews?review=${input.reviewId}`;
   await emitNotification({
     type: "review.submitted",
     title: input.isPublished
@@ -312,6 +316,13 @@ export async function notifyReviewSubmitted(input: {
     linkPath,
     payload: {
       reviewId: input.reviewId,
+      productTitle: input.productTitle,
+      productSlug: input.productSlug,
+      authorName: input.authorName,
+      rating: input.rating,
+      body: input.body,
+      contactPhone: input.contactPhone,
+      contactEmail: input.contactEmail,
       isPublished: input.isPublished,
     },
     emailSubject: input.isPublished

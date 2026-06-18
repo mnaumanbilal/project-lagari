@@ -13,11 +13,11 @@ import { trackAddToCart, trackRemoveFromCart } from "@/lib/analytics/event-buffe
 import { USE_API } from "@/lib/api/config";
 import * as cartApi from "@/lib/api/cart";
 import { withSessionRetry } from "@/lib/api/with-session-retry";
+import { PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/site/placeholder-image";
 import type { CatalogProduct } from "@/lib/types/catalog";
 import { useSession } from "@/lib/session/session-context";
 
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1541643600914-78b084683601?w=400&q=80";
+const FALLBACK_IMAGE = PRODUCT_PLACEHOLDER_IMAGE;
 
 export type CartLine = {
   variantId: string;
@@ -51,15 +51,38 @@ function mapApiCart(
   imageByVariant: Record<string, string>,
   slugByVariant: Record<string, string>,
 ): CartLine[] {
-  return cart.items.map((item) => ({
-    variantId: item.variantId,
-    productSlug: slugByVariant[item.variantId] ?? "",
-    productTitle: item.productTitle,
-    variantName: item.variantName,
-    unitPricePkr: item.unitPricePkr,
-    quantity: item.quantity,
-    imageUrl: imageByVariant[item.variantId] ?? FALLBACK_IMAGE,
-  }));
+  return cart.items.map((item) => {
+    const imageUrl =
+      item.imageUrl ??
+      imageByVariant[item.variantId] ??
+      FALLBACK_IMAGE;
+    const productSlug =
+      item.productSlug || slugByVariant[item.variantId] || "";
+    return {
+      variantId: item.variantId,
+      productSlug,
+      productTitle: item.productTitle,
+      variantName: item.variantName,
+      unitPricePkr: item.unitPricePkr,
+      quantity: item.quantity,
+      imageUrl,
+    };
+  });
+}
+
+function mapsFromCartItems(
+  items: cartApi.ApiCartItem[],
+): {
+  images: Record<string, string>;
+  slugs: Record<string, string>;
+} {
+  const images: Record<string, string> = {};
+  const slugs: Record<string, string> = {};
+  for (const item of items) {
+    if (item.imageUrl) images[item.variantId] = item.imageUrl;
+    if (item.productSlug) slugs[item.variantId] = item.productSlug;
+  }
+  return { images, slugs };
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -99,7 +122,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     runCartOp((id) => cartApi.fetchCart(id))
       .then((cart) => {
-        if (!cancelled) applyCart(cart);
+        if (!cancelled) {
+          const { images, slugs } = mapsFromCartItems(cart.items);
+          setImageByVariant((prev) => ({ ...prev, ...images }));
+          setSlugByVariant((prev) => ({ ...prev, ...slugs }));
+          applyCart(cart, images, slugs);
+        }
       })
       .catch(() => {
         if (!cancelled) setLines([]);
@@ -141,7 +169,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const cart = await runCartOp((id) =>
           cartApi.addToCart(id, variantId, targetQty),
         );
-        applyCart(cart, nextImages, nextSlugs);
+        const { images, slugs } = mapsFromCartItems(cart.items);
+        const mergedImages = { ...nextImages, ...images };
+        const mergedSlugs = { ...nextSlugs, ...slugs };
+        setImageByVariant(mergedImages);
+        setSlugByVariant(mergedSlugs);
+        applyCart(cart, mergedImages, mergedSlugs);
         trackAddToCart({
           productSlug: product.slug,
           variantId,
@@ -195,7 +228,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
           const cart = await runCartOp((id) =>
             cartApi.removeFromCart(id, variantId),
           );
-          applyCart(cart);
+          const { images, slugs } = mapsFromCartItems(cart.items);
+          applyCart(cart, images, slugs);
           trackRemoveFromCart({
             variantId,
             productSlug: slugByVariant[variantId],
@@ -205,7 +239,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const cart = await runCartOp((id) =>
           cartApi.addToCart(id, variantId, quantity),
         );
-        applyCart(cart);
+        const { images, slugs } = mapsFromCartItems(cart.items);
+        applyCart(cart, images, slugs);
         return;
       }
 
@@ -238,7 +273,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const cart = await runCartOp((id) =>
           cartApi.removeFromCart(id, variantId),
         );
-        applyCart(cart);
+        const { images, slugs } = mapsFromCartItems(cart.items);
+        applyCart(cart, images, slugs);
         trackRemoveFromCart({
           variantId,
           productSlug: slugByVariant[variantId],

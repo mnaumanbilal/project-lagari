@@ -33,6 +33,9 @@ type AdminNotificationContextValue = {
   notifications: AdminNotification[];
   muted: boolean;
   setMuted: (muted: boolean) => void;
+  panelOpen: boolean;
+  setPanelOpen: (open: boolean) => void;
+  isHighlighted: (id: string, readAt?: string | null) => boolean;
   refreshInbox: () => Promise<void>;
   markRead: (ids: string[]) => Promise<void>;
   markAllRead: () => Promise<void>;
@@ -58,8 +61,14 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
   const [total, setTotal] = useState(0);
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [muted, setMutedState] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [newArrivalIds, setNewArrivalIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const eventSourceRef = useRef<EventSource | null>(null);
+  const panelOpenRef = useRef(false);
+  panelOpenRef.current = panelOpen;
   const reconnectTimerRef = useRef<number | null>(null);
   const tokenRefreshTimerRef = useRef<number | null>(null);
   const intentionalCloseRef = useRef(false);
@@ -131,6 +140,11 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
   const markRead = useCallback(async (ids: string[]) => {
     const res = await markNotificationsRead({ ids });
     setUnreadCount(res.unreadCount);
+    setNewArrivalIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.delete(id);
+      return next;
+    });
     setNotifications((prev) =>
       prev.map((n) =>
         ids.includes(n.id) ? { ...n, readAt: new Date().toISOString() } : n,
@@ -141,10 +155,17 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
   const markAllRead = useCallback(async () => {
     const res = await markNotificationsRead({ all: true });
     setUnreadCount(res.unreadCount);
+    setNewArrivalIds(new Set());
     setNotifications((prev) =>
       prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
     );
   }, []);
+
+  const isHighlighted = useCallback(
+    (id: string, readAt?: string | null) =>
+      !readAt || newArrivalIds.has(id),
+    [newArrivalIds],
+  );
 
   const closeStream = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -184,6 +205,9 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
             (event as MessageEvent).data,
           ) as AdminNotification;
           alertOnce(notification);
+          if (!panelOpenRef.current) {
+            setNewArrivalIds((prev) => new Set(prev).add(notification.id));
+          }
           void refreshUnreadCount();
           setNotifications((prev) => {
             if (prev.some((n) => n.id === notification.id)) return prev;
@@ -259,6 +283,9 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
       notifications,
       muted,
       setMuted,
+      panelOpen,
+      setPanelOpen,
+      isHighlighted,
       refreshInbox,
       markRead,
       markAllRead,
@@ -271,6 +298,8 @@ export function AdminNotificationProvider({ children }: { children: ReactNode })
       notifications,
       muted,
       setMuted,
+      panelOpen,
+      isHighlighted,
       refreshInbox,
       markRead,
       markAllRead,

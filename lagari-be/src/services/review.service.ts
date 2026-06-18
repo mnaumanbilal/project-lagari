@@ -16,7 +16,8 @@ import {
 } from "../utils/contact-normalize";
 import { notifyReviewSubmitted } from "./notification.service";
 
-const VERIFIED_ORDER_STATUSES = ["pending", "confirmed", "shipped", "delivered"];
+/** Orders that count toward verified-purchase review eligibility (excludes pending COD). */
+export const VERIFIED_ORDER_STATUSES = ["confirmed", "shipped", "delivered"];
 
 export type ReviewSummary = {
   averageRating: number;
@@ -31,6 +32,10 @@ export type AdminReviewListParams = {
   productSearch?: string;
   /** @deprecated Use productSearch — kept for older admin links. */
   productSlug?: string;
+  /** Matches author name, review body, or submission contact (partial, case-insensitive). */
+  reviewSearch?: string;
+  /** Pin a single review (e.g. deep link from admin email). */
+  reviewId?: string;
   from?: Date;
   to?: Date;
   sort?: "newest" | "oldest" | "rating_high" | "rating_low";
@@ -304,7 +309,7 @@ export type ReviewEligibilityFailureCode =
 
 /** Shared message for "no account" and "no purchase" — must stay identical. */
 const PURCHASE_NOT_VERIFIED_MESSAGE =
-  "We couldn't verify a purchase for this product with those contact details. Please use the phone number or email from your order.";
+  "We couldn't verify a purchase for this product with those contact details. Please use the phone number or email from your order. Reviews are available after your order is confirmed.";
 
 export type ReviewEligibilityResult =
   | { canSubmit: true; purchaseUnits: number; remainingReviews: number }
@@ -481,8 +486,12 @@ export async function submitCustomerReview(
   void notifyReviewSubmitted({
     reviewId: review.id,
     productTitle: product.title,
+    productSlug: product.slug,
     authorName: review.authorName,
     rating: review.rating,
+    body: review.body,
+    contactPhone: normalised.phone,
+    contactEmail: normalised.email,
     isPublished: true,
   }).catch((err) => console.error("review notification failed:", err));
 
@@ -526,7 +535,9 @@ export async function listAdminReviews(params: AdminReviewListParams) {
   const offset = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
-  if (params.status === "pending") {
+  if (params.reviewId) {
+    where.id = params.reviewId;
+  } else if (params.status === "pending") {
     where.isPublished = false;
   } else if (params.status === "published") {
     where.isPublished = true;
@@ -543,6 +554,19 @@ export async function listAdminReviews(params: AdminReviewListParams) {
     if (params.from) createdAt[Op.gte as unknown as string] = params.from;
     if (params.to) createdAt[Op.lte as unknown as string] = params.to;
     where.createdAt = createdAt;
+  }
+
+  const reviewTerm = normalizeSearchTerm(params.reviewSearch ?? "");
+  if (reviewTerm) {
+    const pattern = ilikeContainsPattern(reviewTerm);
+    Object.assign(where, {
+      [Op.or]: [
+        { authorName: { [Op.iLike]: pattern } },
+        { body: { [Op.iLike]: pattern } },
+        { contactPhoneNormalized: { [Op.iLike]: pattern } },
+        { contactEmailNormalized: { [Op.iLike]: pattern } },
+      ],
+    });
   }
 
   const productInclude: {

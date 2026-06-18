@@ -223,6 +223,9 @@ const reviewStatusQuery = z.object({
   status: z.enum(["all", "pending", "published"]).default("all"),
   productSearch: z.string().max(120).optional(),
   productSlug: z.string().max(120).optional(),
+  reviewSearch: z.string().max(120).optional(),
+  q: z.string().max(120).optional(),
+  reviewId: z.string().uuid().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
   sort: z
@@ -240,6 +243,8 @@ export async function listAdminReviews(req: Request, res: Response) {
     await reviewService.listAdminReviews({
       status: query.status,
       productSearch: query.productSearch ?? query.productSlug,
+      reviewSearch: query.reviewSearch ?? query.q,
+      reviewId: query.reviewId,
       from: query.from ? new Date(query.from) : undefined,
       to: query.to ? new Date(query.to) : undefined,
       sort: query.sort,

@@ -3,9 +3,11 @@ import { apiFetch } from "./client";
 export type ApiCartItem = {
   variantId: string;
   productTitle: string;
+  productSlug: string;
   variantName: string;
   quantity: number;
   unitPricePkr: number;
+  imageUrl?: string;
 };
 
 export type ApiCart = {
