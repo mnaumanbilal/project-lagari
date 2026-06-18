@@ -11,6 +11,7 @@ import {
   buildCustomerOrderEmail,
   type OrderEmailContext,
 } from "../templates/customer-order-email";
+import { resolveOrderCustomerContact } from "../utils/order-contact";
 
 export type CustomerOrderEvent = OrderStatus | "placed";
 
@@ -28,10 +29,11 @@ async function loadOrderContext(
 
   const customer = (order as Order & { customer?: Customer }).customer;
   const items = (order as Order & { items?: OrderItem[] }).items ?? [];
+  const contact = resolveOrderCustomerContact(order, customer);
 
   return {
     orderNumber: order.orderNumber,
-    customerName: customer?.fullName ?? "there",
+    customerName: contact.customerName,
     status: event === "placed" ? "placed" : event,
     subtotalPkr: order.subtotalPkr,
     discountPkr: order.discountPkr,
@@ -68,7 +70,7 @@ export async function notifyCustomerOrderEvent(
   if (!order) return;
 
   const customer = (order as Order & { customer?: Customer }).customer;
-  const email = customer?.email?.trim();
+  const email = resolveOrderCustomerContact(order, customer).customerEmail;
 
   if (email && isSmtpConfigured()) {
     const mail = buildCustomerOrderEmail(ctx);

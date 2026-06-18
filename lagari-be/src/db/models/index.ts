@@ -307,6 +307,10 @@ export interface OrderAttributes {
   totalPkr: number;
   shippingCity: string;
   shippingAddress: string;
+  /** Checkout-time customer name (immutable per order). */
+  customerNameSnapshot: string | null;
+  customerPhoneSnapshot: string | null;
+  customerEmailSnapshot: string | null;
   notes: string | null;
   courierName: string | null;
   trackingNumber: string | null;
@@ -318,7 +322,7 @@ export interface OrderAttributes {
 }
 type OrderCreation = Optional<
   OrderAttributes,
-  "id" | "orderNumber" | "sessionId" | "discountPkr" | "notes" | "courierName" | "trackingNumber" | "adminNotes" | "cancelReason" | "archivedAt"
+  "id" | "orderNumber" | "sessionId" | "discountPkr" | "notes" | "courierName" | "trackingNumber" | "adminNotes" | "cancelReason" | "archivedAt" | "customerNameSnapshot" | "customerPhoneSnapshot" | "customerEmailSnapshot"
 >;
 
 export class Order extends Model<OrderAttributes, OrderCreation> implements OrderAttributes {
@@ -334,6 +338,9 @@ export class Order extends Model<OrderAttributes, OrderCreation> implements Orde
   declare totalPkr: number;
   declare shippingCity: string;
   declare shippingAddress: string;
+  declare customerNameSnapshot: string | null;
+  declare customerPhoneSnapshot: string | null;
+  declare customerEmailSnapshot: string | null;
   declare notes: string | null;
   declare courierName: string | null;
   declare trackingNumber: string | null;
@@ -364,6 +371,21 @@ Order.init(
     totalPkr: { type: DataTypes.INTEGER, allowNull: false, field: "total_pkr" },
     shippingCity: { type: DataTypes.STRING, allowNull: false, field: "shipping_city" },
     shippingAddress: { type: DataTypes.TEXT, allowNull: false, field: "shipping_address" },
+    customerNameSnapshot: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: "customer_name_snapshot",
+    },
+    customerPhoneSnapshot: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      field: "customer_phone_snapshot",
+    },
+    customerEmailSnapshot: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: "customer_email_snapshot",
+    },
     notes: { type: DataTypes.TEXT, allowNull: true },
     courierName: { type: DataTypes.STRING, allowNull: true, field: "courier_name" },
     trackingNumber: { type: DataTypes.STRING, allowNull: true, field: "tracking_number" },

@@ -18,6 +18,7 @@ import {
   notifyOrderStatusChanged,
 } from "./notification.service";
 import { tryNormalizePkPhone, normalizeEmail } from "../utils/contact-normalize";
+import { resolveOrderCustomerContact } from "../utils/order-contact";
 import { cacheDel, cacheGet, cacheSet, cacheSetNx } from "../lib/redis";
 import { logger } from "../utils/logger";
 
@@ -98,15 +99,16 @@ export function mapOrderSummary(order: OrderWithRelations) {
   const customer = order.customer;
   const items = order.items ?? [];
   const { itemCount, itemPreview } = buildItemPreview(items);
+  const contact = resolveOrderCustomerContact(order, customer);
 
   return {
     id: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
     totalPkr: order.totalPkr,
-    customerName: customer?.fullName ?? "—",
-    customerPhone: customer?.phone ?? "—",
-    customerEmail: customer?.email ?? null,
+    customerName: contact.customerName,
+    customerPhone: contact.customerPhone,
+    customerEmail: contact.customerEmail,
     shippingCity: order.shippingCity,
     itemCount,
     itemPreview,
@@ -189,6 +191,8 @@ export async function listAdminOrders(params: {
   const search = params.search?.trim();
   if (search) {
     const orConditions: WhereOptions[] = [
+      { customerNameSnapshot: { [Op.iLike]: `%${search}%` } },
+      { customerPhoneSnapshot: { [Op.iLike]: `%${search}%` } },
       { "$customer.full_name$": { [Op.iLike]: `%${search}%` } },
       { "$customer.phone$": { [Op.iLike]: `%${search}%` } },
     ];
@@ -444,7 +448,10 @@ export async function placeCodOrder(input: {
     });
 
     await customer.update(
-      { fullName: input.fullName, email: normalizedEmail ?? customer.email },
+      {
+        fullName: input.fullName,
+        ...(normalizedEmail != null ? { email: normalizedEmail } : {}),
+      },
       { transaction: t },
     );
 
@@ -458,6 +465,9 @@ export async function placeCodOrder(input: {
         totalPkr: cart.subtotalPkr,
         shippingCity: input.city,
         shippingAddress: input.address,
+        customerNameSnapshot: input.fullName.trim(),
+        customerPhoneSnapshot: normalizedPhone,
+        customerEmailSnapshot: normalizedEmail ?? null,
         notes: null,
       },
       { transaction: t },

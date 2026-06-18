@@ -887,9 +887,9 @@ export async function getLinkedOrderForReview(
             o.discount_pkr,
             o.shipping_city,
             o.shipping_address,
-            c.full_name   AS customer_full_name,
-            c.phone       AS customer_phone,
-            c.email       AS customer_email
+            COALESCE(o.customer_name_snapshot, c.full_name) AS customer_full_name,
+            COALESCE(o.customer_phone_snapshot, c.phone) AS customer_phone,
+            COALESCE(o.customer_email_snapshot, c.email) AS customer_email
      FROM orders o
      JOIN customers c ON c.id = o.customer_id
      WHERE o.customer_id = :customerId

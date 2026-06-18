@@ -5,6 +5,7 @@ import {
   type OrderStatus,
 } from "../db/models";
 import { customerWhatsAppHref } from "../utils/customer-whatsapp";
+import { resolveOrderCustomerContact } from "../utils/order-contact";
 import { storefrontProductUrl } from "../utils/storefront-url";
 
 export type AdminOrderLineItem = {
@@ -59,14 +60,15 @@ export async function loadAdminOrderSnapshot(
 
   const customer = (order as Order & { customer?: Customer }).customer;
   const items = (order as Order & { items?: OrderItem[] }).items ?? [];
+  const contact = resolveOrderCustomerContact(order, customer);
 
   return {
     orderId: order.id,
     orderNumber: order.orderNumber,
     status: order.status,
-    customerName: customer?.fullName?.trim() || "—",
-    customerPhone: customer?.phone ?? "—",
-    customerEmail: customer?.email?.trim() || null,
+    customerName: contact.customerName,
+    customerPhone: contact.customerPhone,
+    customerEmail: contact.customerEmail,
     shippingCity: order.shippingCity,
     shippingAddress: order.shippingAddress,
     subtotalPkr: order.subtotalPkr,
