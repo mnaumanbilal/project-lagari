@@ -1,11 +1,11 @@
 import nodemailer from "nodemailer";
-import { env, isEmailConfigured } from "../config/env";
+import { env, isEmailConfigured, isSmtpConfigured } from "../config/env";
 import { withRetry } from "../utils/retry";
 
 let transporter: nodemailer.Transporter | null = null;
 
 function getTransporter(): nodemailer.Transporter | null {
-  if (!isEmailConfigured()) return null;
+  if (!isSmtpConfigured()) return null;
   if (!transporter) {
     transporter = nodemailer.createTransport({
       host: env.email.host,
@@ -25,6 +25,7 @@ export async function sendAdminEmail(input: {
   text: string;
   html: string;
 }): Promise<void> {
+  if (!isEmailConfigured()) return;
   const transport = getTransporter();
   if (!transport) return;
 

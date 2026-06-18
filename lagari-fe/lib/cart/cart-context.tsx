@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -97,12 +98,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
   );
   const [cartReady, setCartReady] = useState(!USE_API);
 
-  const applyCart = useCallback(
-    (cart: cartApi.ApiCart, images = imageByVariant, slugs = slugByVariant) => {
+  const imageByVariantRef = useRef(imageByVariant);
+  const slugByVariantRef = useRef(slugByVariant);
+  imageByVariantRef.current = imageByVariant;
+  slugByVariantRef.current = slugByVariant;
+
+  const applyCartWithMaps = useCallback(
+    (
+      cart: cartApi.ApiCart,
+      images: Record<string, string>,
+      slugs: Record<string, string>,
+    ) => {
+      imageByVariantRef.current = images;
+      slugByVariantRef.current = slugs;
+      setImageByVariant(images);
+      setSlugByVariant(slugs);
       setLines(mapApiCart(cart, images, slugs));
       setSubtotalPkr(cart.subtotalPkr);
     },
-    [imageByVariant, slugByVariant],
+    [],
   );
 
   const runCartOp = useCallback(
@@ -124,9 +138,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       .then((cart) => {
         if (!cancelled) {
           const { images, slugs } = mapsFromCartItems(cart.items);
-          setImageByVariant((prev) => ({ ...prev, ...images }));
-          setSlugByVariant((prev) => ({ ...prev, ...slugs }));
-          applyCart(cart, images, slugs);
+          const mergedImages = { ...imageByVariantRef.current, ...images };
+          const mergedSlugs = { ...slugByVariantRef.current, ...slugs };
+          applyCartWithMaps(cart, mergedImages, mergedSlugs);
         }
       })
       .catch(() => {
@@ -139,7 +153,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, runCartOp, applyCart]);
+  }, [sessionId, runCartOp, applyCartWithMaps]);
 
   const itemCount = useMemo(
     () => lines.reduce((s, l) => s + l.quantity, 0),
@@ -155,10 +169,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
       const maxStock = Math.max(0, variant.stock ?? 99);
       const hero = product.heroImageUrl ?? FALLBACK_IMAGE;
-      const nextImages = { ...imageByVariant, [variantId]: hero };
-      const nextSlugs = { ...slugByVariant, [variantId]: product.slug };
-      setImageByVariant(nextImages);
-      setSlugByVariant(nextSlugs);
+      const nextImages = { ...imageByVariantRef.current, [variantId]: hero };
+      const nextSlugs = { ...slugByVariantRef.current, [variantId]: product.slug };
 
       if (USE_API) {
         const existing = lines.find((l) => l.variantId === variantId);
@@ -172,9 +184,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         const { images, slugs } = mapsFromCartItems(cart.items);
         const mergedImages = { ...nextImages, ...images };
         const mergedSlugs = { ...nextSlugs, ...slugs };
-        setImageByVariant(mergedImages);
-        setSlugByVariant(mergedSlugs);
-        applyCart(cart, mergedImages, mergedSlugs);
+        applyCartWithMaps(cart, mergedImages, mergedSlugs);
         trackAddToCart({
           productSlug: product.slug,
           variantId,
@@ -182,6 +192,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         });
         return;
       }
+
+      setImageByVariant(nextImages);
+      setSlugByVariant(nextSlugs);
+      imageByVariantRef.current = nextImages;
+      slugByVariantRef.current = nextSlugs;
 
       setLines((prev) => {
         const existing = prev.find((l) => l.variantId === variantId);
@@ -218,7 +233,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [imageByVariant, slugByVariant, lines, runCartOp, applyCart],
+    [lines, runCartOp, applyCartWithMaps],
   );
 
   const setQuantity = useCallback(
@@ -229,10 +244,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
             cartApi.removeFromCart(id, variantId),
           );
           const { images, slugs } = mapsFromCartItems(cart.items);
-          applyCart(cart, images, slugs);
+          const mergedImages = { ...imageByVariantRef.current, ...images };
+          const mergedSlugs = { ...slugByVariantRef.current, ...slugs };
+          applyCartWithMaps(cart, mergedImages, mergedSlugs);
           trackRemoveFromCart({
             variantId,
-            productSlug: slugByVariant[variantId],
+            productSlug: slugByVariantRef.current[variantId],
           });
           return;
         }
@@ -240,7 +257,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
           cartApi.addToCart(id, variantId, quantity),
         );
         const { images, slugs } = mapsFromCartItems(cart.items);
-        applyCart(cart, images, slugs);
+        const mergedImages = { ...imageByVariantRef.current, ...images };
+        const mergedSlugs = { ...slugByVariantRef.current, ...slugs };
+        applyCartWithMaps(cart, mergedImages, mergedSlugs);
         return;
       }
 
@@ -264,7 +283,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [runCartOp, applyCart, slugByVariant],
+    [runCartOp, applyCartWithMaps],
   );
 
   const removeItem = useCallback(
@@ -274,10 +293,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
           cartApi.removeFromCart(id, variantId),
         );
         const { images, slugs } = mapsFromCartItems(cart.items);
-        applyCart(cart, images, slugs);
+        const mergedImages = { ...imageByVariantRef.current, ...images };
+        const mergedSlugs = { ...slugByVariantRef.current, ...slugs };
+        applyCartWithMaps(cart, mergedImages, mergedSlugs);
         trackRemoveFromCart({
           variantId,
-          productSlug: slugByVariant[variantId],
+          productSlug: slugByVariantRef.current[variantId],
         });
         return;
       }
@@ -289,7 +310,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return next;
       });
     },
-    [runCartOp, applyCart, slugByVariant],
+    [runCartOp, applyCartWithMaps],
   );
 
   const clearCart = useCallback(() => {

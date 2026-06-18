@@ -34,6 +34,9 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
+/** Coalesce parallel ensureSession calls into one in-flight promise. */
+let ensureSessionPromise: Promise<string> | null = null;
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [visitorId, setVisitorId] = useState<string | null>(null);
@@ -60,35 +63,48 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       return "";
     }
 
-    const vid = getOrCreateVisitorId();
-    setVisitorId(vid);
-
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
-    if (stored) {
-      setSessionId(stored);
-      const lastTouch = sessionStorage.getItem(SESSION_TOUCH_KEY);
-      const touchFresh =
-        lastTouch && Date.now() - Number(lastTouch) < SESSION_TOUCH_INTERVAL_MS;
-
-      if (touchFresh) {
-        setSessionId(stored);
-        setReady(true);
-        return stored;
-      }
-
-      try {
-        await touchSession(stored);
-        sessionStorage.setItem(SESSION_TOUCH_KEY, String(Date.now()));
-        setSessionId(stored);
-        setReady(true);
-        return stored;
-      } catch {
-        sessionStorage.removeItem(SESSION_STORAGE_KEY);
-        sessionStorage.removeItem(SESSION_TOUCH_KEY);
-      }
+    if (ensureSessionPromise) {
+      return ensureSessionPromise;
     }
 
-    return createAndStoreSession();
+    ensureSessionPromise = (async () => {
+      const vid = getOrCreateVisitorId();
+      setVisitorId(vid);
+
+      const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+      if (stored) {
+        setSessionId(stored);
+        const lastTouch = sessionStorage.getItem(SESSION_TOUCH_KEY);
+        const touchFresh =
+          lastTouch &&
+          Date.now() - Number(lastTouch) < SESSION_TOUCH_INTERVAL_MS;
+
+        if (touchFresh) {
+          setSessionId(stored);
+          setReady(true);
+          return stored;
+        }
+
+        try {
+          await touchSession(stored);
+          sessionStorage.setItem(SESSION_TOUCH_KEY, String(Date.now()));
+          setSessionId(stored);
+          setReady(true);
+          return stored;
+        } catch {
+          sessionStorage.removeItem(SESSION_STORAGE_KEY);
+          sessionStorage.removeItem(SESSION_TOUCH_KEY);
+        }
+      }
+
+      return createAndStoreSession();
+    })();
+
+    try {
+      return await ensureSessionPromise;
+    } finally {
+      ensureSessionPromise = null;
+    }
   }, [createAndStoreSession]);
 
   const refreshSession = useCallback(async (): Promise<string> => {

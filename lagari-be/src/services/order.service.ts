@@ -18,6 +18,7 @@ import {
   notifyOrderStatusChanged,
 } from "./notification.service";
 import { tryNormalizePkPhone, normalizeEmail } from "../utils/contact-normalize";
+import { cacheDel, cacheSetNx } from "../lib/redis";
 
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending: ["confirmed", "rto", "cancelled"],
@@ -349,18 +350,28 @@ export async function placeCodOrder(input: {
   address: string;
   email?: string;
 }) {
-  const cart = await getCart(input.sessionId);
-  if (!cart.items.length) {
-    return null;
+  const lockKey = `checkout:lock:${input.sessionId}`;
+  const locked = await cacheSetNx(lockKey, "1", 60);
+  if (!locked) {
+    throw new AppError(
+      409,
+      "Checkout already in progress. Please wait a moment.",
+    );
   }
 
-  // Normalise contact before storing so review lookups always match
-  const normalizedPhone = tryNormalizePkPhone(input.phone) ?? input.phone;
-  const normalizedEmail = input.email ? (() => {
-    try { return normalizeEmail(input.email!); } catch { return input.email!; }
-  })() : undefined;
+  try {
+    const cart = await getCart(input.sessionId);
+    if (!cart.items.length) {
+      return null;
+    }
 
-  return sequelize.transaction(async (t) => {
+    // Normalise contact before storing so review lookups always match
+    const normalizedPhone = tryNormalizePkPhone(input.phone) ?? input.phone;
+    const normalizedEmail = input.email ? (() => {
+      try { return normalizeEmail(input.email!); } catch { return input.email!; }
+    })() : undefined;
+
+    return await sequelize.transaction(async (t) => {
     const [customer] = await Customer.findOrCreate({
       where: { phone: normalizedPhone },
       defaults: {
@@ -459,5 +470,8 @@ export async function placeCodOrder(input: {
     }
 
     return result;
-  });
+    });
+  } finally {
+    await cacheDel(lockKey);
+  }
 }

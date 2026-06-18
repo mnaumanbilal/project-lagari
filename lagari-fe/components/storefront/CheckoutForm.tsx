@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { LagariLogo } from "@/components/brand/LagariLogo";
 import { USE_API } from "@/lib/api/config";
 import { placeCodOrder } from "@/lib/api/cart";
@@ -37,6 +37,7 @@ export function CheckoutForm() {
   const [orderNumber, setOrderNumber] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const placingRef = useRef(false);
 
   if (!ready) {
     return (
@@ -95,6 +96,8 @@ export function CheckoutForm() {
         className="lg:col-span-3"
         onSubmit={async (e) => {
           e.preventDefault();
+          if (placingRef.current || submitting) return;
+          placingRef.current = true;
           setError(null);
           setSubmitting(true);
 
@@ -133,6 +136,7 @@ export function CheckoutForm() {
             }
           } finally {
             setSubmitting(false);
+            placingRef.current = false;
           }
         }}
       >

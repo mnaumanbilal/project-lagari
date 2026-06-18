@@ -43,6 +43,23 @@ export async function cacheSet(
   });
 }
 
+/** Set only if missing — returns true when the key was created. */
+export async function cacheSetNx(
+  key: string,
+  value: string,
+  ttlSeconds: number,
+): Promise<boolean> {
+  const redis = getRedis();
+  if (redis) {
+    const result = await redis.set(key, value, "EX", ttlSeconds, "NX");
+    return result === "OK";
+  }
+  const existing = await cacheGet(key);
+  if (existing) return false;
+  await cacheSet(key, value, ttlSeconds);
+  return true;
+}
+
 export async function cacheDel(key: string): Promise<void> {
   const redis = getRedis();
   if (redis) {
