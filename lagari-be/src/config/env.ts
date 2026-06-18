@@ -59,7 +59,10 @@ function resolveDb() {
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3000",
+  corsOrigins: (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean),
   db: resolveDb(),
   redisUrl: process.env.REDIS_URL ?? "",
   jwt: {
@@ -100,7 +103,13 @@ export const env = {
     process.env.PUBLIC_SITE_URL ??
     "https://www.lagari.pk"
   ).replace(/\/$/, ""),
-  storefrontUrl: process.env.STOREFRONT_URL ?? process.env.CORS_ORIGIN ?? "http://localhost:3000",
+  storefrontUrl:
+    process.env.STOREFRONT_URL ??
+    (process.env.CORS_ORIGIN ?? "http://localhost:3000")
+      .split(",")[0]
+      ?.trim()
+      .replace(/\/$/, "") ??
+    "http://localhost:3000",
   publicSiteUrl: process.env.PUBLIC_SITE_URL ?? "https://www.lagari.pk",
   webPush: {
     publicKey: process.env.VAPID_PUBLIC_KEY ?? "",
