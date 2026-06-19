@@ -13,6 +13,7 @@ import {
 } from "../lib/notification-pubsub";
 import { sendAdminEmail } from "../providers/email.provider";
 import { sendSlackMessage } from "../providers/slack.provider";
+import { logger } from "../utils/logger";
 import { buildAdminNotificationEmail } from "../templates/admin-notification-email";
 import {
   loadAdminOrderSnapshot,
@@ -58,7 +59,7 @@ function dispatchExternalChannels(input: EmitNotificationInput): void {
       storefrontSiteUrl: env.publicSiteUrl.replace(/\/$/, ""),
     });
     void sendAdminEmail(mail).catch((err) => {
-      console.error("admin email failed:", err);
+      logger.error({ err }, "admin email failed");
     });
   }
   void sendSlackMessage(`*${input.title}*\n${input.body}`).catch((err) => {

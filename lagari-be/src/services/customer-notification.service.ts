@@ -1,5 +1,5 @@
 import { LAGARI_CONTACT } from "../config/contact";
-import { env, isSmtpConfigured } from "../config/env";
+import { env, isEmailDeliveryConfigured } from "../config/env";
 import {
   Customer,
   Order,
@@ -12,6 +12,7 @@ import {
   type OrderEmailContext,
 } from "../templates/customer-order-email";
 import { resolveOrderCustomerContact } from "../utils/order-contact";
+import { logger } from "../utils/logger";
 
 export type CustomerOrderEvent = OrderStatus | "placed";
 
@@ -46,6 +47,7 @@ async function loadOrderContext(
     siteUrl: env.publicSiteUrl.replace(/\/$/, ""),
     whatsappPhone: LAGARI_CONTACT.whatsappPhone,
     whatsappHref: LAGARI_CONTACT.whatsappHref,
+    supportEmail: LAGARI_CONTACT.supportEmail,
     items: items.map((item) => ({
       title: item.productTitleSnapshot,
       variant: item.variantNameSnapshot,
@@ -72,13 +74,13 @@ export async function notifyCustomerOrderEvent(
   const customer = (order as Order & { customer?: Customer }).customer;
   const email = resolveOrderCustomerContact(order, customer).customerEmail;
 
-  if (email && isSmtpConfigured()) {
+  if (email && isEmailDeliveryConfigured()) {
     const mail = buildCustomerOrderEmail(ctx);
     void sendCustomerEmail({
       to: email,
       subject: mail.subject,
       text: mail.text,
       html: mail.html,
-    }).catch((err) => console.error("customer order email failed:", err));
+    }).catch((err) => logger.error({ err, orderId }, "customer order email failed"));
   }
 }

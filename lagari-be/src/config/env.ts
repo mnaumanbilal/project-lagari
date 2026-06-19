@@ -95,6 +95,16 @@ export const env = {
     appPassword: process.env.SMTP_APP_PASSWORD ?? "",
     from: process.env.EMAIL_FROM ?? "Lagari <noreply@lagari.pk>",
     adminTo: process.env.ADMIN_EMAIL ?? "",
+    /** Customer reply target — defaults to ADMIN_EMAIL when unset. */
+    replyTo: process.env.REPLY_TO_EMAIL ?? process.env.ADMIN_EMAIL ?? "",
+  },
+  /** HTTPS email API — use on Render (SMTP ports blocked on free tier). */
+  resend: {
+    apiKey: process.env.RESEND_API_KEY ?? "",
+    from:
+      process.env.RESEND_FROM ??
+      process.env.EMAIL_FROM ??
+      "Lagari <onboarding@resend.dev>",
   },
   slackWebhookUrl: process.env.SLACK_WEBHOOK_URL ?? "",
   /** Primary site domain for admin links (e.g. https://www.lagari.pk) */
@@ -123,14 +133,29 @@ export function isCloudinaryConfigured(): boolean {
   return Boolean(c.cloudName && c.apiKey && c.apiSecret);
 }
 
-export function isEmailConfigured(): boolean {
-  const e = env.email;
-  return Boolean(e.user && e.appPassword && e.adminTo);
+export function isResendConfigured(): boolean {
+  const r = env.resend;
+  return Boolean(r.apiKey && r.from);
 }
 
 export function isSmtpConfigured(): boolean {
   const e = env.email;
   return Boolean(e.user && e.appPassword);
+}
+
+/** Active outbound email transport (Resend preferred over SMTP). */
+export function getEmailProvider(): "resend" | "smtp" | "none" {
+  if (isResendConfigured()) return "resend";
+  if (isSmtpConfigured()) return "smtp";
+  return "none";
+}
+
+export function isEmailDeliveryConfigured(): boolean {
+  return getEmailProvider() !== "none";
+}
+
+export function isEmailConfigured(): boolean {
+  return Boolean(env.email.adminTo) && isEmailDeliveryConfigured();
 }
 
 export function isWebPushConfigured(): boolean {

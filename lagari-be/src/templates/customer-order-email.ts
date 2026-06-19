@@ -29,6 +29,7 @@ export type OrderEmailContext = {
   siteUrl: string;
   whatsappPhone: string;
   whatsappHref: string;
+  supportEmail: string;
 };
 
 /** Lagari theme palette — matches lagari-fe/app/globals.css (solid hex for email clients) */
@@ -118,12 +119,13 @@ function numStyle(extra = ""): string {
 function contactFooterHtml(ctx: OrderEmailContext): string {
   return `<p style="margin:28px 0 0;font-family:${FONT};font-size:14px;color:${C.textMuted};line-height:1.6;">
       Questions? Message us on WhatsApp:<br>
-      <a href="${ctx.whatsappHref}" style="color:${C.label};text-decoration:none;font-weight:600;font-family:${FONT};">${ctx.whatsappPhone}</a>
+      <a href="${ctx.whatsappHref}" style="color:${C.label};text-decoration:none;font-weight:600;font-family:${FONT};">${ctx.whatsappPhone}</a><br>
+      or email <a href="mailto:${ctx.supportEmail}" style="color:${C.label};text-decoration:none;font-weight:600;font-family:${FONT};">${ctx.supportEmail}</a>
     </p>`;
 }
 
 function contactFooterText(ctx: OrderEmailContext): string {
-  return `Questions? WhatsApp us at ${ctx.whatsappPhone}\n${ctx.whatsappHref}`;
+  return `Questions? WhatsApp us at ${ctx.whatsappPhone} (${ctx.whatsappHref}) or email ${ctx.supportEmail}`;
 }
 
 export function buildCustomerOrderEmail(ctx: OrderEmailContext): {

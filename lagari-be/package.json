@@ -44,6 +44,7 @@
     "nodemailer": "^8.0.10",
     "pg": "^8.21.0",
     "pino": "^10.3.1",
+    "resend": "^4.8.0",
     "sequelize": "^6.37.8",
     "typescript": "^6.0.3",
     "web-push": "^3.6.7",
